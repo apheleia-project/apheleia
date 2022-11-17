@@ -32,11 +32,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
 public class DeployCommand implements Runnable {
 
     static final int CURRENT_VERSION = 1;
-    public static final String APHELIA_DEPLOYED = "aphelia-deployed";
+    public static final String APHELIA_DEPLOYED = "io.aphelia/deployed";
 
     @Inject
     KubernetesClient client;
@@ -73,15 +73,29 @@ public class DeployCommand implements Runnable {
                     .setAuthentication(new AuthenticationBuilder().addUsername("aws").addPassword(System.getenv("CODEARTIFACT_AUTH_TOKEN")).build()).build();
 
             MixedOperation<RebuiltArtifact, KubernetesResourceList<RebuiltArtifact>, Resource<RebuiltArtifact>> rebuildArtifacts = client.resources(RebuiltArtifact.class);
+            Map<String, List<RebuiltArtifact>> rebuiltArtifactMap = new HashMap<>();
             for (var i : rebuildArtifacts.list().getItems()) {
-                if (i.getMetadata().getAnnotations() != null) {
-                    String version = i.getMetadata().getAnnotations().get(APHELIA_DEPLOYED);
-                    if (version == null || Integer.parseInt(version) >= CURRENT_VERSION) {
-                        System.out.println("Skipping " + i.getSpec().getGav());
-                        continue;
+                rebuiltArtifactMap.computeIfAbsent(i.getSpec().getImage(), s -> new ArrayList<>()).add(i);
+            }
+            for (var e : rebuiltArtifactMap.entrySet()) {
+
+                boolean deploy = false;
+                for (var i : e.getValue()) {
+                    if (i.getMetadata().getAnnotations() != null) {
+                        String version = i.getMetadata().getAnnotations().get(APHELIA_DEPLOYED);
+                        if (version == null || Integer.parseInt(version) < CURRENT_VERSION) {
+                            deploy = true;
+                        }
+                    } else {
+                        deploy = true;
+                        break;
                     }
                 }
-                String image = i.getSpec().getImage();
+                if (!deploy) {
+                    continue;
+                }
+
+                String image = e.getKey();
                 Optional<Path> result = registryRepositoryClient.extractImage(image.substring(image.lastIndexOf(":") + 1));
                 if (result.isPresent()) {
                     try {
@@ -131,22 +145,24 @@ public class DeployCommand implements Runnable {
                             }
 
                         });
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
+                    } catch (IOException ex) {
+                        throw new RuntimeException(ex);
                     }
                 } else {
-                    System.err.println("Failed to download " + i);
+                    System.err.println("Failed to download " + e.getKey());
                 }
-                rebuildArtifacts.withName(i.getMetadata().getName()).edit(new UnaryOperator<RebuiltArtifact>() {
-                    @Override
-                    public RebuiltArtifact apply(RebuiltArtifact rebuiltArtifact) {
-                        if (i.getMetadata().getAnnotations() == null) {
-                            i.getMetadata().setAnnotations(new HashMap<>());
+                for (var i : e.getValue()) {
+                    rebuildArtifacts.withName(i.getMetadata().getName()).edit(new UnaryOperator<RebuiltArtifact>() {
+                        @Override
+                        public RebuiltArtifact apply(RebuiltArtifact rebuiltArtifact) {
+                            if (rebuiltArtifact.getMetadata().getAnnotations() == null) {
+                                rebuiltArtifact.getMetadata().setAnnotations(new HashMap<>());
+                            }
+                            rebuiltArtifact.getMetadata().getAnnotations().put(APHELIA_DEPLOYED, Integer.toString(CURRENT_VERSION));
+                            return rebuiltArtifact;
                         }
-                        i.getMetadata().getAnnotations().put(APHELIA_DEPLOYED, Integer.toString(CURRENT_VERSION));
-                        return rebuiltArtifact;
-                    }
-                });
+                    });
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

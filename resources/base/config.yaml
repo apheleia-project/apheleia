@@ -5,6 +5,9 @@ metadata:
   name: jvm-build-config
 spec:
   enableRebuilds: true
+  buildSettings:
+    buildRequestMemory: 1024Mi
+    taskRequestMemory: 1024Mi
   mavenBaseLocations:
     maven-repository-200-shawkins: "https://raw.githubusercontent.com/shawkins/repo/master"
     maven-repository-300-jboss: "https://repository.jboss.org/nexus/content/groups/public/"
