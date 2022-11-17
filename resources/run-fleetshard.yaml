@@ -1,0 +1,29 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: service-registry-build-
+spec:
+  pipelineRef:
+    name: sample-component-build
+  params:
+    - name: url
+      value: https://github.com/bf2fc6cc711aee1a0c2a/kas-fleetshard.git
+    - name: app-path
+      value: ""
+    - name: revision
+      value: 0.31.0
+  workspaces:
+      - name: maven-settings
+        emptyDir: {}
+      - name: shared-workspace
+        volumeClaimTemplate:
+          spec:
+            accessModes:
+              - ReadWriteOnce # access mode may affect how you can use this volume in parallel tasks
+            resources:
+              requests:
+                storage: 5Gi
+  taskRunSpecs:
+    - pipelineTaskName: maven-run
+      taskServiceAccountName: pipeline
+
