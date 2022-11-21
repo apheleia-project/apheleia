@@ -19,6 +19,7 @@
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.version>2.12.0.Final</quarkus.platform.version>
+        <jvm-build-service.version>1.0-SNAPSHOT</jvm-build-service.version>
 
         <!-- Plugin Versions-->
         <surefire-plugin.version>3.0.0-M5</surefire-plugin.version>
@@ -59,27 +60,17 @@
             <dependency>
                 <groupId>com.redhat.hacbs</groupId>
                 <artifactId>hacbs-build-analyser</artifactId>
-                <version>${project.version}</version>
+                <version>${jvm-build-service.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.redhat.hacbs</groupId>
                 <artifactId>hacbs-classfile-tracker</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.redhat.hacbs</groupId>
-                <artifactId>hacbs-operator</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.redhat.hacbs</groupId>
-                <artifactId>hacbs-resource-model</artifactId>
-                <version>${project.version}</version>
+                <version>${jvm-build-service.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.redhat.hacbs</groupId>
                 <artifactId>hacbs-build-recipies-database</artifactId>
-                <version>${project.version}</version>
+                <version>${jvm-build-service.version}</version>
             </dependency>
             <dependency>
                 <groupId>software.amazon.awssdk</groupId>
