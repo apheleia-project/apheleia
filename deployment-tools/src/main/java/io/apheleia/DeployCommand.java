@@ -1,38 +1,5 @@
 package io.apheleia;
 
-import com.amazonaws.services.codeartifact.AWSCodeArtifactClientBuilder;
-import com.amazonaws.services.codeartifact.model.DeletePackageVersionsRequest;
-import com.amazonaws.services.codeartifact.model.PackageFormat;
-import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-import io.apheleia.kube.RebuiltArtifact;
-import io.apheleia.kube.UserConfig;
-import io.fabric8.kubernetes.api.model.KubernetesResourceList;
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.dsl.MixedOperation;
-import io.fabric8.kubernetes.client.dsl.Resource;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
-import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
-import org.eclipse.aether.DefaultRepositorySystemSession;
-import org.eclipse.aether.RepositorySystem;
-import org.eclipse.aether.artifact.Artifact;
-import org.eclipse.aether.artifact.DefaultArtifact;
-import org.eclipse.aether.connector.basic.BasicRepositoryConnectorFactory;
-import org.eclipse.aether.deployment.DeployRequest;
-import org.eclipse.aether.deployment.DeploymentException;
-import org.eclipse.aether.impl.DefaultServiceLocator;
-import org.eclipse.aether.repository.LocalRepository;
-import org.eclipse.aether.repository.RemoteRepository;
-import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
-import org.eclipse.aether.spi.connector.transport.TransporterFactory;
-import org.eclipse.aether.transport.file.FileTransporterFactory;
-import org.eclipse.aether.transport.http.HttpTransporterFactory;
-import org.eclipse.aether.util.repository.AuthenticationBuilder;
-import picocli.CommandLine;
-
-import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -49,6 +16,44 @@ import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import javax.inject.Inject;
+
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.codeartifact.model.GetAuthorizationTokenRequest;
+import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
+import org.eclipse.aether.DefaultRepositorySystemSession;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.connector.basic.BasicRepositoryConnectorFactory;
+import org.eclipse.aether.deployment.DeployRequest;
+import org.eclipse.aether.deployment.DeploymentException;
+import org.eclipse.aether.impl.DefaultServiceLocator;
+import org.eclipse.aether.repository.LocalRepository;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
+import org.eclipse.aether.spi.connector.transport.TransporterFactory;
+import org.eclipse.aether.transport.file.FileTransporterFactory;
+import org.eclipse.aether.transport.http.HttpTransporterFactory;
+import org.eclipse.aether.util.repository.AuthenticationBuilder;
+
+import com.amazonaws.services.codeartifact.AWSCodeArtifactClientBuilder;
+import com.amazonaws.services.codeartifact.model.DeletePackageVersionsRequest;
+import com.amazonaws.services.codeartifact.model.PackageFormat;
+import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+
+import io.apheleia.kube.RebuiltArtifact;
+import io.apheleia.kube.UserConfig;
+import io.fabric8.kubernetes.api.model.KubernetesResourceList;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.dsl.MixedOperation;
+import io.fabric8.kubernetes.client.dsl.Resource;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import picocli.CommandLine;
 
 @TopCommand
 @CommandLine.Command
@@ -75,12 +80,16 @@ public class DeployCommand implements Runnable {
             LocalRepository localRepo = new LocalRepository(Files.createTempDirectory("apheleia").toFile());
             session.setLocalRepositoryManager(system.newLocalRepositoryManager(session, localRepo));
 
+            var awsClient = AWSCodeArtifactClientBuilder.standard().withRegion(Regions.US_EAST_2).build();
+            final String token = awsClient.getAuthorizationToken(new GetAuthorizationTokenRequest()
+                    .withDomain("rhosak")
+                    .withDomainOwner("237843776254")).getAuthorizationToken();
             RemoteRepository distRepo = new RemoteRepository.Builder("repo",
                     "default",
                     "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/")
-                    .setAuthentication(new AuthenticationBuilder().addUsername("aws")
-                            .addPassword(System.getenv("CODEARTIFACT_AUTH_TOKEN")).build())
-                    .build();
+                            .setAuthentication(new AuthenticationBuilder().addUsername("aws")
+                                    .addPassword(token).build())
+                            .build();
 
             MixedOperation<RebuiltArtifact, KubernetesResourceList<RebuiltArtifact>, Resource<RebuiltArtifact>> rebuildArtifacts = client
                     .resources(RebuiltArtifact.class);
@@ -88,8 +97,11 @@ public class DeployCommand implements Runnable {
             for (var i : rebuildArtifacts.list().getItems()) {
                 rebuiltArtifactMap.computeIfAbsent(i.getSpec().getImage(), s -> new ArrayList<>()).add(i);
             }
+            int total = rebuiltArtifactMap.size();
+            int count = 0;
             for (var e : rebuiltArtifactMap.entrySet()) {
 
+                System.out.println("COUNT: " + (count++) + "/" + total);
                 try {
                     boolean deploy = false;
                     for (var i : e.getValue()) {
@@ -107,7 +119,6 @@ public class DeployCommand implements Runnable {
                     if (!deploy) {
                         continue;
                     }
-                    var awsClient = AWSCodeArtifactClientBuilder.defaultClient();
 
                     String image = e.getKey();
                     Optional<Path> result = registryRepositoryClient.extractImage(image.substring(image.lastIndexOf(":") + 1));
@@ -116,7 +127,8 @@ public class DeployCommand implements Runnable {
                             Files.walkFileTree(result.get(), new SimpleFileVisitor<>() {
 
                                 @Override
-                                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                                        throws IOException {
                                     try (var stream = Files.list(dir)) {
                                         List<Path> files = stream.toList();
                                         boolean hasPom = files.stream().anyMatch(s -> s.toString().endsWith(".pom"));
@@ -126,11 +138,13 @@ public class DeployCommand implements Runnable {
                                             String group = relative.getParent().getParent().toString().replace("/", ".");
                                             String artifact = relative.getParent().getFileName().toString();
                                             String version = dir.getFileName().toString();
-                                            System.out.println("GROUP: " + group + " , ART:" + artifact + " , VERSION: " + version);
+                                            System.out.println(
+                                                    "GROUP: " + group + " , ART:" + artifact + " , VERSION: " + version);
                                             Pattern p = Pattern.compile(artifact + "-" + version + "(-(\\w+))?\\.(\\w+)");
 
                                             try {
-                                                DeletePackageVersionsRequest request = new DeletePackageVersionsRequest().withPackage(artifact)
+                                                DeletePackageVersionsRequest request = new DeletePackageVersionsRequest()
+                                                        .withPackage(artifact)
                                                         .withRepository("sdouglas-scratch")
                                                         .withDomain("rhosak")
                                                         .withFormat(PackageFormat.Maven)
@@ -145,13 +159,11 @@ public class DeployCommand implements Runnable {
                                             for (var i : files) {
                                                 Matcher matcher = p.matcher(i.getFileName().toString());
                                                 if (matcher.matches()) {
-                                                    System.out.println(i.getFileName());
-                                                    System.out.println(matcher.group(2));
-                                                    System.out.println(matcher.group(3));
                                                     if (matcher.group(3).equals("jar")) {
                                                         var in = Files.readAllBytes(i);
                                                         var out = ClassFileTracker.addTrackingDataToJar(in,
-                                                                new TrackingData(group + ":" + artifact + ":" + version, "rebuilt",
+                                                                new TrackingData(group + ":" + artifact + ":" + version,
+                                                                        "rebuilt",
                                                                         Collections.emptyMap()));
                                                         Files.write(i, out);
                                                         Files.writeString(
@@ -161,7 +173,8 @@ public class DeployCommand implements Runnable {
                                                                 i.getParent().resolve(i.getFileName().toString() + ".sha1"),
                                                                 HashUtil.sha1(out));
                                                     }
-                                                    Artifact jarArtifact = new DefaultArtifact(group, artifact, matcher.group(2),
+                                                    Artifact jarArtifact = new DefaultArtifact(group, artifact,
+                                                            matcher.group(2),
                                                             matcher.group(3),
                                                             version);
                                                     jarArtifact = jarArtifact.setFile(i.toFile());
@@ -201,7 +214,8 @@ public class DeployCommand implements Runnable {
                         });
                     }
                 } catch (Exception ex) {
-                    Log.errorf(ex, "Failed to handle image for %s", e.getValue().stream().map(s -> s.getSpec().getGav()).collect(Collectors.toList()));
+                    Log.errorf(ex, "Failed to handle image for %s",
+                            e.getValue().stream().map(s -> s.getSpec().getGav()).collect(Collectors.toList()));
                     throw new RuntimeException(ex);
                 }
             }
