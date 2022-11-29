@@ -5,14 +5,11 @@ function cleanAllArtifacts() {
      kubectl delete namespaces apheleia
 }
 
-kubectl delete deployments.apps jvm-build-workspace-artifact-cache
-if [ "$1" = "--clean" ]; then
-    cleanAllArtifacts
-fi
-
 DIR=`dirname $0`
+kubectl create secret generic jvm-build-secrets --from-file=.dockerconfigjson=$HOME/.docker/config.json --type=kubernetes.io/dockerconfigjson
 kubectl apply -f $DIR/namespace.yaml
 kubectl config set-context --current --namespace=apheleia
 $DIR/patch-yaml.sh
 kubectl apply -k $DIR/overlays/development
 
+kubectl rollout restart deployment jvm-build-workspace-artifact-cache

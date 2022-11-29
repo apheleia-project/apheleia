@@ -1,0 +1,29 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: kafka-build-
+spec:
+  pipelineRef:
+    name: gradle-build
+  params:
+    - name: url
+      value: https://github.com/apache/kafka.git
+    - name: app-path
+      value: ""
+    - name: revision
+      value: 3.3.1
+  workspaces:
+      - name: maven-settings
+        emptyDir: {}
+      - name: shared-workspace
+        volumeClaimTemplate:
+          spec:
+            accessModes:
+              - ReadWriteOnce # access mode may affect how you can use this volume in parallel tasks
+            resources:
+              requests:
+                storage: 5Gi
+  taskRunSpecs:
+    - pipelineTaskName: gradle-run
+      taskServiceAccountName: pipeline
+
