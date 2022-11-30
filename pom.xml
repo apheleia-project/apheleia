@@ -39,6 +39,7 @@
 
     <modules>
         <module>deployment-tools</module>
+        <module>dependency-analyser</module>
     </modules>
 
     <dependencyManagement>
@@ -60,6 +61,11 @@
             <dependency>
                 <groupId>com.redhat.hacbs</groupId>
                 <artifactId>hacbs-build-analyser</artifactId>
+                <version>${jvm-build-service.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.redhat.hacbs</groupId>
+                <artifactId>hacbs-resource-model</artifactId>
                 <version>${jvm-build-service.version}</version>
             </dependency>
             <dependency>

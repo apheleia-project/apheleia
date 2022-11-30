@@ -19,8 +19,6 @@ import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.codeartifact.model.GetAuthorizationTokenRequest;
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
 import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
@@ -38,8 +36,10 @@ import org.eclipse.aether.transport.file.FileTransporterFactory;
 import org.eclipse.aether.transport.http.HttpTransporterFactory;
 import org.eclipse.aether.util.repository.AuthenticationBuilder;
 
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.codeartifact.AWSCodeArtifactClientBuilder;
 import com.amazonaws.services.codeartifact.model.DeletePackageVersionsRequest;
+import com.amazonaws.services.codeartifact.model.GetAuthorizationTokenRequest;
 import com.amazonaws.services.codeartifact.model.PackageFormat;
 import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
 import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
