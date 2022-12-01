@@ -1,5 +1,19 @@
 package io.apheleia;
 
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import org.cyclonedx.BomGeneratorFactory;
+import org.cyclonedx.CycloneDxSchema;
+import org.cyclonedx.generators.json.BomJsonGenerator;
+import org.cyclonedx.model.Bom;
+import org.cyclonedx.model.Component;
+import org.cyclonedx.model.Property;
+import picocli.CommandLine;
+
+import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -8,26 +22,11 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-
-import javax.inject.Inject;
-
-import org.cyclonedx.BomGeneratorFactory;
-import org.cyclonedx.CycloneDxSchema;
-import org.cyclonedx.generators.json.BomJsonGenerator;
-import org.cyclonedx.model.Bom;
-import org.cyclonedx.model.Component;
-import org.cyclonedx.model.Property;
-
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
-import picocli.CommandLine;
 
 @TopCommand
 @CommandLine.Command
@@ -42,6 +41,8 @@ public class AnalyserCommand implements Runnable {
     @CommandLine.Option(names = "-s")
     Path sbom;
 
+    @CommandLine.Option(names = "-m", required = true)
+    Path mavenRepo;
     @CommandLine.Parameters
     List<Path> paths;
 
@@ -51,7 +52,6 @@ public class AnalyserCommand implements Runnable {
             Set<String> gavs = new HashSet<>();
             Set<TrackingData> trackingData = new HashSet<>();
             doAnalysis(gavs, trackingData);
-            System.out.println(trackingData);
             writeSbom(trackingData);
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -59,21 +59,38 @@ public class AnalyserCommand implements Runnable {
     }
 
     void doAnalysis(Set<String> gavs, Set<TrackingData> trackingData) throws IOException {
-        Log.infof("Root paths %s", paths);
+        //scan the local maven repo first
 
-        //look for classes produced by the build
-        Set<String> plainClasses = new HashSet<>();
+        Map<String, String> untrackedCommunityClassesForMaven = new HashMap<>();
+        Files.walkFileTree(mavenRepo, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                if (file.getFileName().toString().endsWith(".jar")) {
+                    ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file), file.getFileName().toString(), (s) -> {
+                        if (s.equals("module-info")) {
+                            return;
+                        }
+                        untrackedCommunityClassesForMaven.put(s, file.toString());
+                    });
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        //look for classes produced by the build and remove them from the community set
         for (var path : paths) {
             Files.walkFileTree(path, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     if (file.getFileName().toString().endsWith(".class")) {
-                        ClassFileTracker.readTrackingInformationFromClass(Files.readAllBytes(file), plainClasses::add);
+                        ClassFileTracker.readTrackingInformationFromClass(Files.readAllBytes(file), untrackedCommunityClassesForMaven::remove);
                     }
                     return FileVisitResult.CONTINUE;
                 }
             });
         }
+
+        Log.infof("Root paths %s", paths);
+
         Set<String> additional = new HashSet<>();
 
         for (var path : paths) {
@@ -84,8 +101,11 @@ public class AnalyserCommand implements Runnable {
                     try (var contents = Files.newInputStream(file)) {
                         Log.debugf("Processing %s", fileName);
                         var jarData = ClassFileTracker.readTrackingDataFromFile(contents, fileName, (s) -> {
-                            if (!plainClasses.contains(s)) {
-                                System.err.println("ERROR: " + s);
+                            if (untrackedCommunityClassesForMaven.containsKey(s)) {
+                                String jar = untrackedCommunityClassesForMaven.get(s);
+                                if (additional.add(jar)) {
+                                    System.out.println(jar + " found in " + file);
+                                }
                             }
 
                         });
@@ -105,6 +125,7 @@ public class AnalyserCommand implements Runnable {
                 }
             });
         }
+        System.err.println(additional);
     }
 
     void writeSbom(Set<TrackingData> trackingData) throws IOException {
