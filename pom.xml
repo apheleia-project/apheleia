@@ -340,5 +340,11 @@
         </profile>
 
     </profiles>
-
+    <distributionManagement>
+        <repository>
+            <id>rhosak-sdouglas-scratch</id>
+            <name>rhosak-sdouglas-scratch</name>
+            <url>${env.CODEARTIFACT_URL}</url>
+        </repository>
+    </distributionManagement>
 </project>
