@@ -1,19 +1,5 @@
 package io.apheleia;
 
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
-import org.cyclonedx.BomGeneratorFactory;
-import org.cyclonedx.CycloneDxSchema;
-import org.cyclonedx.generators.json.BomJsonGenerator;
-import org.cyclonedx.model.Bom;
-import org.cyclonedx.model.Component;
-import org.cyclonedx.model.Property;
-import picocli.CommandLine;
-
-import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -28,21 +14,45 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
+
+import org.cyclonedx.BomGeneratorFactory;
+import org.cyclonedx.CycloneDxSchema;
+import org.cyclonedx.generators.json.BomJsonGenerator;
+import org.cyclonedx.model.Bom;
+import org.cyclonedx.model.Component;
+import org.cyclonedx.model.Property;
+
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+import com.redhat.hacbs.resources.model.v1alpha1.*;
+
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import io.quarkus.runtime.Quarkus;
+import picocli.CommandLine;
+
 @TopCommand
 @CommandLine.Command
 public class AnalyserCommand implements Runnable {
 
     @Inject
-    KubernetesClient client;
+    Instance<KubernetesClient> client;
 
     @CommandLine.Option(names = "--allowed-sources", defaultValue = "redhat,rebuilt", split = ",")
     Set<String> allowedSources;
 
-    @CommandLine.Option(names = "-s")
+    @CommandLine.Option(names = "--sbom-path")
     Path sbom;
 
-    @CommandLine.Option(names = "-m", required = true)
+    @CommandLine.Option(names = "--maven-repo", required = true)
     Path mavenRepo;
+
+    @CommandLine.Option(names = "--create-artifacts")
+    boolean createArtifacts;
+
     @CommandLine.Parameters
     List<Path> paths;
 
@@ -51,17 +61,31 @@ public class AnalyserCommand implements Runnable {
         try {
             Set<String> gavs = new HashSet<>();
             Set<TrackingData> trackingData = new HashSet<>();
-            doAnalysis(gavs, trackingData);
-            writeSbom(trackingData);
+            var communityDeps = doAnalysis(gavs, trackingData);
+            if (createArtifacts) {
+                var c = client.get();
+                for (var i : gavs) {
+                    ArtifactBuild abr = new ArtifactBuild();
+                    abr.getSpec().setGav(i);
+                    c.resource(abr).createOrReplace();
+                }
+            }
+            if (communityDeps) {
+                //exit with non-zero if there were community deps
+                Quarkus.asyncExit(1);
+            } else {
+                //note that the SBOM is only valid when there are no community deps
+                writeSbom(trackingData);
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    void doAnalysis(Set<String> gavs, Set<TrackingData> trackingData) throws IOException {
+    boolean doAnalysis(Set<String> gavs, Set<TrackingData> trackingData) throws IOException {
         //scan the local maven repo first
 
-        Map<String, String> untrackedCommunityClassesForMaven = new HashMap<>();
+        Map<String, Path> untrackedCommunityClassesForMaven = new HashMap<>();
         Files.walkFileTree(mavenRepo, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -70,7 +94,7 @@ public class AnalyserCommand implements Runnable {
                         if (s.equals("module-info")) {
                             return;
                         }
-                        untrackedCommunityClassesForMaven.put(s, file.toString());
+                        untrackedCommunityClassesForMaven.put(s, file);
                     });
                 }
                 return FileVisitResult.CONTINUE;
@@ -82,7 +106,8 @@ public class AnalyserCommand implements Runnable {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     if (file.getFileName().toString().endsWith(".class")) {
-                        ClassFileTracker.readTrackingInformationFromClass(Files.readAllBytes(file), untrackedCommunityClassesForMaven::remove);
+                        ClassFileTracker.readTrackingInformationFromClass(Files.readAllBytes(file),
+                                untrackedCommunityClassesForMaven::remove);
                     }
                     return FileVisitResult.CONTINUE;
                 }
@@ -91,7 +116,7 @@ public class AnalyserCommand implements Runnable {
 
         Log.infof("Root paths %s", paths);
 
-        Set<String> additional = new HashSet<>();
+        Set<Path> additional = new HashSet<>();
 
         for (var path : paths) {
             Files.walkFileTree(path, new SimpleFileVisitor<>() {
@@ -102,9 +127,9 @@ public class AnalyserCommand implements Runnable {
                         Log.debugf("Processing %s", fileName);
                         var jarData = ClassFileTracker.readTrackingDataFromFile(contents, fileName, (s) -> {
                             if (untrackedCommunityClassesForMaven.containsKey(s)) {
-                                String jar = untrackedCommunityClassesForMaven.get(s);
+                                var jar = untrackedCommunityClassesForMaven.get(s);
                                 if (additional.add(jar)) {
-                                    System.out.println(jar + " found in " + file);
+                                    Log.infof("Community jar" + jar.getFileName() + " found in " + path.relativize(file));
                                 }
                             }
 
@@ -125,7 +150,30 @@ public class AnalyserCommand implements Runnable {
                 }
             });
         }
-        System.err.println(additional);
+        //now figure out the additional GAV's
+        for (var i : additional) {
+            boolean gradle = i.getParent().getFileName().toString().length() == 40;
+            //gradle repo layout is different to maven
+            //we use a different strategy to determine the GAV
+            if (gradle) {
+                Path version = i.getParent().getParent();
+                Path artifact = version.getParent();
+                Path group = artifact.getParent();
+                String gav = group.getFileName() + ":" + artifact.getFileName() + ":" + version.getFileName();
+                gavs.add(gav);
+                trackingData.add(new TrackingData(gav, "community", Map.of()));
+            } else {
+                Path version = i.getParent();
+                Path artifact = version.getParent();
+                var group = mavenRepo.relativize(artifact.getParent()).toString().replace("/", ".");
+                String gav = group + ":" + artifact.getFileName() + ":" + version.getFileName();
+                gavs.add(gav);
+                trackingData.add(new TrackingData(gav, "community", Map.of()));
+            }
+        }
+
+        System.err.println(gavs);
+        return !additional.isEmpty();
     }
 
     void writeSbom(Set<TrackingData> trackingData) throws IOException {
