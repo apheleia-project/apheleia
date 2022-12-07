@@ -6,7 +6,7 @@ metadata:
   namespace: kas-fleetshard
 spec:
   enableRebuilds: true
-  owner: sdouglas
+  owner: mk-ci-cd
   mavenBaseLocations:
     maven-repository-300-jboss: "https://repository.jboss.org/nexus/content/groups/public/"
     maven-repository-301-gradleplugins: "https://plugins.gradle.org/m2"
