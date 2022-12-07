@@ -13,6 +13,13 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: openshift-operators
+  name: openshift-
+  labels:
+    argocd.argoproj.io/managed-by: argocd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kas-fleetshard
   labels:
     argocd.argoproj.io/managed-by: argocd

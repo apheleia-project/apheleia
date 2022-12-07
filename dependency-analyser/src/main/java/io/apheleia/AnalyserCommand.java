@@ -17,6 +17,7 @@ import java.util.Set;
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
+import com.redhat.hacbs.resources.util.ResourceNameUtils;
 import org.cyclonedx.BomGeneratorFactory;
 import org.cyclonedx.CycloneDxSchema;
 import org.cyclonedx.generators.json.BomJsonGenerator;
@@ -66,6 +67,7 @@ public class AnalyserCommand implements Runnable {
                 var c = client.get();
                 for (var i : gavs) {
                     ArtifactBuild abr = new ArtifactBuild();
+                    abr.getMetadata().setName(ResourceNameUtils.nameFromGav(i));
                     abr.getSpec().setGav(i);
                     c.resource(abr).createOrReplace();
                 }
