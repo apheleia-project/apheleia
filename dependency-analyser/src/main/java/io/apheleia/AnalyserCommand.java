@@ -153,6 +153,22 @@ public class AnalyserCommand implements Runnable {
                         var jarData = ClassFileTracker.readTrackingDataFromFile(contents, fileName, (s) -> {
                             if (untrackedCommunityClassesForMaven.containsKey(s)) {
                                 var jars = untrackedCommunityClassesForMaven.get(s);
+                                var filtered = new ArrayList<Path>();
+                                if (jars.size() > 1) {
+                                    for (var i : jars) {
+                                        try {
+                                            if (Files.size(file) == Files.size(i)) {
+                                                filtered.add(i);
+                                            }
+                                        } catch (IOException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    }
+                                    if (filtered.size() == 1) {
+                                        jars = filtered;
+                                    }
+                                }
+
                                 for (var jar : jars) {
                                     if (additional.add(jar)) {
                                         Log.infof("Community jar " + jar.getFileName() + " found in " + path.relativize(file));
