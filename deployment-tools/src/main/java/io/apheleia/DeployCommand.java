@@ -35,6 +35,7 @@ import org.eclipse.aether.spi.connector.transport.TransporterFactory;
 import org.eclipse.aether.transport.file.FileTransporterFactory;
 import org.eclipse.aether.transport.http.HttpTransporterFactory;
 import org.eclipse.aether.util.repository.AuthenticationBuilder;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.codeartifact.AWSCodeArtifactClientBuilder;
@@ -45,8 +46,8 @@ import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
 import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
 import com.redhat.hacbs.classfile.tracker.TrackingData;
 
+import io.apheleia.kube.JBSConfig;
 import io.apheleia.kube.RebuiltArtifact;
-import io.apheleia.kube.UserConfig;
 import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
@@ -65,15 +66,23 @@ public class DeployCommand implements Runnable {
     @Inject
     KubernetesClient client;
 
+    @ConfigProperty(name = "domain") //rhosak
+    String domain;
+
+    @ConfigProperty(name = "owner") //237843776254
+    String owner;
+
+    @ConfigProperty(name = "repo") //https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/
+    String repo;
+
     public void run() {
         try {
-            UserConfig config = client.resources(UserConfig.class).withName("jvm-build-config").get();
+            JBSConfig config = client.resources(JBSConfig.class).withName("jvm-build-config").get();
             OCIRegistryRepositoryClient registryRepositoryClient = new OCIRegistryRepositoryClient(
                     Optional.ofNullable(config.getSpec().getHost()).orElse("quay.io"),
                     config.getSpec().getOwner(),
                     Optional.ofNullable(config.getSpec().getRepository()).orElse("artifact-deployments"),
-                    Optional.ofNullable(System.getenv("QUAY_TOKEN")),
-                    Optional.ofNullable(config.getSpec().getPrependTag()), false);
+                    Optional.ofNullable(System.getenv("QUAY_TOKEN")), false);
 
             RepositorySystem system = newRepositorySystem();
             DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
@@ -82,11 +91,11 @@ public class DeployCommand implements Runnable {
 
             var awsClient = AWSCodeArtifactClientBuilder.standard().withRegion(Regions.US_EAST_2).build();
             final String token = awsClient.getAuthorizationToken(new GetAuthorizationTokenRequest()
-                    .withDomain("rhosak")
-                    .withDomainOwner("237843776254")).getAuthorizationToken();
+                    .withDomain(domain)
+                    .withDomainOwner(owner)).getAuthorizationToken();
             RemoteRepository distRepo = new RemoteRepository.Builder("repo",
                     "default",
-                    "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/")
+                    repo)
                             .setAuthentication(new AuthenticationBuilder().addUsername("aws")
                                     .addPassword(token).build())
                             .build();
@@ -95,7 +104,9 @@ public class DeployCommand implements Runnable {
                     .resources(RebuiltArtifact.class);
             Map<String, List<RebuiltArtifact>> rebuiltArtifactMap = new HashMap<>();
             for (var i : rebuildArtifacts.list().getItems()) {
-                rebuiltArtifactMap.computeIfAbsent(i.getSpec().getImage(), s -> new ArrayList<>()).add(i);
+                if (i.getSpec().getImage() != null) {
+                    rebuiltArtifactMap.computeIfAbsent(i.getSpec().getImage(), s -> new ArrayList<>()).add(i);
+                }
             }
             int total = rebuiltArtifactMap.size();
             int count = 0;

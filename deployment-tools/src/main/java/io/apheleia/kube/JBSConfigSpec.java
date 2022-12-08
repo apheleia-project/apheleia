@@ -3,7 +3,7 @@ package io.apheleia.kube;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class UserConfigSpec {
+public class JBSConfigSpec {
     private String host;
     private String port;
     private String owner;
@@ -15,7 +15,7 @@ public class UserConfigSpec {
         return host;
     }
 
-    public UserConfigSpec setHost(String host) {
+    public JBSConfigSpec setHost(String host) {
         this.host = host;
         return this;
     }
@@ -24,7 +24,7 @@ public class UserConfigSpec {
         return port;
     }
 
-    public UserConfigSpec setPort(String port) {
+    public JBSConfigSpec setPort(String port) {
         this.port = port;
         return this;
     }
@@ -33,7 +33,7 @@ public class UserConfigSpec {
         return owner;
     }
 
-    public UserConfigSpec setOwner(String owner) {
+    public JBSConfigSpec setOwner(String owner) {
         this.owner = owner;
         return this;
     }
@@ -42,7 +42,7 @@ public class UserConfigSpec {
         return repository;
     }
 
-    public UserConfigSpec setRepository(String repository) {
+    public JBSConfigSpec setRepository(String repository) {
         this.repository = repository;
         return this;
     }
@@ -51,7 +51,7 @@ public class UserConfigSpec {
         return insecure;
     }
 
-    public UserConfigSpec setInsecure(String insecure) {
+    public JBSConfigSpec setInsecure(String insecure) {
         this.insecure = insecure;
         return this;
     }
@@ -60,7 +60,7 @@ public class UserConfigSpec {
         return prependTag;
     }
 
-    public UserConfigSpec setPrependTag(String prependTag) {
+    public JBSConfigSpec setPrependTag(String prependTag) {
         this.prependTag = prependTag;
         return this;
     }

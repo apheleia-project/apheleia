@@ -11,12 +11,12 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @Group(ModelConstants.GROUP)
 @Version(ModelConstants.VERSION)
 @JsonInclude(Include.NON_NULL)
-public class UserConfig extends CustomResource<UserConfigSpec, Void>
+public class JBSConfig extends CustomResource<JBSConfigSpec, Void>
         implements Namespaced {
 
     @Override
-    protected UserConfigSpec initSpec() {
-        return new UserConfigSpec();
+    protected JBSConfigSpec initSpec() {
+        return new JBSConfigSpec();
     }
 
 }

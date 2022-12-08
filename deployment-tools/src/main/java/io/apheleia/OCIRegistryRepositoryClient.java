@@ -41,16 +41,13 @@ public class OCIRegistryRepositoryClient {
 
     private final String registry;
     private final String owner;
-    private final Optional<String> prependHashedGav;
     private final String repository;
     private final boolean enableHttpAndInsecureFailover;
     private final Path cacheRoot;
     private final Credential credential;
 
     public OCIRegistryRepositoryClient(String registry, String owner, String repository, Optional<String> token,
-            Optional<String> prependHashedGav,
             boolean enableHttpAndInsecureFailover) {
-        this.prependHashedGav = prependHashedGav;
         this.registry = registry;
         this.owner = owner;
         this.repository = repository;
