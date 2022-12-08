@@ -2,7 +2,7 @@ resources:
 - https://github.com/redhat-appstudio/jvm-build-service/deploy/crds/base?ref=ea07d3b388d61176b2c4c1b3da2da33b1c070a81
 - https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/base?ref=ea07d3b388d61176b2c4c1b3da2da33b1c070a81
 - https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/config?ref=ea07d3b388d61176b2c4c1b3da2da33b1c070a81
-
+- quota.yaml
 
 images:
   - name: hacbs-jvm-operator
