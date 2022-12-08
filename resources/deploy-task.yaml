@@ -1,0 +1,36 @@
+# a placeholder for development; in a fully integrated system, this will come from the appstudio tekton bundle
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: deploy
+spec:
+  description: >-
+    This Task can be used to deploy rebuilt artifacts to a maven repository.
+  params:
+    - name: DOMAIN
+      type: string
+    - name: OWNER
+      type: string
+    - name: REPO
+      type: string
+  steps:
+    - name: deploy
+      image: quay.io/sdouglas/apheleia:latest
+      imagePullPolicy: Always
+      env:
+        - name: DOMAIN
+          value: $(params.DOMAIN)
+        - name: OWNER
+          value: $(params.OWNER)
+        - name: REPO
+          value: $(params.REPO)
+        - name: AWS_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-secrets
+              key: access-key
+        - name: AWS_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-secrets
+              key: secret-key

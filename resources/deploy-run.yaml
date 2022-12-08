@@ -1,0 +1,14 @@
+apiVersion: tekton.dev/v1beta1
+kind: TaskRun
+metadata:
+  generateName: deploy-
+spec:
+  taskRef:
+    name: deploy
+  params:
+    - name: DOMAIN
+      value: rhosak
+    - name: OWNER
+      value: "237843776254"
+    - name: REPO
+      value: https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/
