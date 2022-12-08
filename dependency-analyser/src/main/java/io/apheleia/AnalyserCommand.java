@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
@@ -26,10 +27,11 @@ import org.cyclonedx.model.Property;
 
 import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
 import com.redhat.hacbs.classfile.tracker.TrackingData;
-import com.redhat.hacbs.resources.model.v1alpha1.*;
+import com.redhat.hacbs.resources.model.v1alpha1.ArtifactBuild;
 import com.redhat.hacbs.resources.util.ResourceNameUtils;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.dsl.Resource;
 import io.quarkus.logging.Log;
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import io.quarkus.runtime.Quarkus;
@@ -65,11 +67,30 @@ public class AnalyserCommand implements Runnable {
             var communityDeps = doAnalysis(gavs, trackingData);
             if (createArtifacts) {
                 var c = client.get();
+                var abrc = c.resources(ArtifactBuild.class);
                 for (var i : gavs) {
-                    ArtifactBuild abr = new ArtifactBuild();
-                    abr.getMetadata().setName(ResourceNameUtils.nameFromGav(i));
-                    abr.getSpec().setGav(i);
-                    c.resource(abr).createOrReplace();
+                    String name = ResourceNameUtils.nameFromGav(i);
+                    Resource<ArtifactBuild> artifactBuildResource = abrc.withName(name);
+                    var abr = artifactBuildResource.get();
+                    if (abr == null) {
+                        abr = new ArtifactBuild();
+                        abr.getMetadata().setName(name);
+                        abr.getSpec().setGav(i);
+                        abr.getMetadata().getAnnotations().put("aphelaia.io/last-used", "" + System.currentTimeMillis());
+                        c.resource(abr).createOrReplace();
+                    } else {
+                        artifactBuildResource.edit(new UnaryOperator<ArtifactBuild>() {
+                            @Override
+                            public ArtifactBuild apply(ArtifactBuild artifactBuild) {
+                                if (artifactBuild.getMetadata().getAnnotations() == null) {
+                                    artifactBuild.getMetadata().setAnnotations(new HashMap<>());
+                                }
+                                artifactBuild.getMetadata().getAnnotations().put("aphelaia.io/last-used",
+                                        "" + System.currentTimeMillis());
+                                return artifactBuild;
+                            }
+                        });
+                    }
                 }
             }
             if (communityDeps) {
