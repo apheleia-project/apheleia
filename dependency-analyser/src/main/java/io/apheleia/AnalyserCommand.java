@@ -110,7 +110,7 @@ public class AnalyserCommand implements Runnable {
     boolean doAnalysis(Set<String> gavs, Set<TrackingData> trackingData) throws IOException {
         //scan the local maven repo first
 
-        Map<String, Path> untrackedCommunityClassesForMaven = new HashMap<>();
+        Map<String, List<Path>> untrackedCommunityClassesForMaven = new HashMap<>();
         Files.walkFileTree(mavenRepo, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -119,7 +119,7 @@ public class AnalyserCommand implements Runnable {
                         if (s.equals("module-info")) {
                             return;
                         }
-                        untrackedCommunityClassesForMaven.put(s, file);
+                        untrackedCommunityClassesForMaven.computeIfAbsent(s, (a) -> new ArrayList<>()).add(file);
                     });
                 }
                 return FileVisitResult.CONTINUE;
@@ -152,9 +152,11 @@ public class AnalyserCommand implements Runnable {
                         Log.debugf("Processing %s", fileName);
                         var jarData = ClassFileTracker.readTrackingDataFromFile(contents, fileName, (s) -> {
                             if (untrackedCommunityClassesForMaven.containsKey(s)) {
-                                var jar = untrackedCommunityClassesForMaven.get(s);
-                                if (additional.add(jar)) {
-                                    Log.infof("Community jar " + jar.getFileName() + " found in " + path.relativize(file));
+                                var jars = untrackedCommunityClassesForMaven.get(s);
+                                for (var jar : jars) {
+                                    if (additional.add(jar)) {
+                                        Log.infof("Community jar " + jar.getFileName() + " found in " + path.relativize(file));
+                                    }
                                 }
                             }
 
