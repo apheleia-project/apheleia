@@ -70,12 +70,14 @@ public class AnalyserCommand implements Runnable {
                 var abrc = c.resources(ArtifactBuild.class);
                 for (var i : gavs) {
                     String name = ResourceNameUtils.nameFromGav(i);
+                    Log.infof("Creating/Updating %s", name);
                     Resource<ArtifactBuild> artifactBuildResource = abrc.withName(name);
                     var abr = artifactBuildResource.get();
                     if (abr == null) {
                         abr = new ArtifactBuild();
                         abr.getMetadata().setName(name);
                         abr.getSpec().setGav(i);
+                        abr.getMetadata().setAnnotations(new HashMap<>());
                         abr.getMetadata().getAnnotations().put("aphelaia.io/last-used", "" + System.currentTimeMillis());
                         c.resource(abr).createOrReplace();
                     } else {
