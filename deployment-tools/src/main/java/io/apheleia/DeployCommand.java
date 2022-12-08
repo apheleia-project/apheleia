@@ -134,6 +134,10 @@ public class DeployCommand implements Runnable {
                     String image = e.getKey();
                     Optional<Path> result = registryRepositoryClient.extractImage(image.substring(image.lastIndexOf(":") + 1));
                     if (result.isPresent()) {
+                        System.out.println("Downloaded " + image);
+                        if (0 == 0) {
+                            continue;
+                        }
                         try {
                             Files.walkFileTree(result.get(), new SimpleFileVisitor<>() {
 

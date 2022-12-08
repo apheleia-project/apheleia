@@ -24,6 +24,11 @@ spec:
           value: $(params.OWNER)
         - name: REPO
           value: $(params.REPO)
+        - name: QUAY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: jvm-build-image-secrets
+              key: .dockerconfigjson
         - name: AWS_ACCESS_KEY
           valueFrom:
             secretKeyRef:
