@@ -17,7 +17,6 @@ import java.util.Set;
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
-import com.redhat.hacbs.resources.util.ResourceNameUtils;
 import org.cyclonedx.BomGeneratorFactory;
 import org.cyclonedx.CycloneDxSchema;
 import org.cyclonedx.generators.json.BomJsonGenerator;
@@ -28,6 +27,7 @@ import org.cyclonedx.model.Property;
 import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
 import com.redhat.hacbs.classfile.tracker.TrackingData;
 import com.redhat.hacbs.resources.model.v1alpha1.*;
+import com.redhat.hacbs.resources.util.ResourceNameUtils;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.logging.Log;
