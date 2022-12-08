@@ -106,6 +106,7 @@ public class OCIRegistryRepositoryClient {
 
     public Optional<Path> extractImage(String image) {
         RegistryClient registryClient = getRegistryClient();
+        registryClient.configureBasicAuth();
 
         try {
             ManifestAndDigest<ManifestTemplate> manifestAndDigest = registryClient.pullManifest(image, ManifestTemplate.class);
