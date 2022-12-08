@@ -131,7 +131,7 @@ public class AnalyserCommand implements Runnable {
                             if (untrackedCommunityClassesForMaven.containsKey(s)) {
                                 var jar = untrackedCommunityClassesForMaven.get(s);
                                 if (additional.add(jar)) {
-                                    Log.infof("Community jar" + jar.getFileName() + " found in " + path.relativize(file));
+                                    Log.infof("Community jar " + jar.getFileName() + " found in " + path.relativize(file));
                                 }
                             }
 
