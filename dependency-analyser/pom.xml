@@ -5,10 +5,10 @@
     <parent>
         <groupId>io.apheleia</groupId>
         <artifactId>apheleia</artifactId>
-        <version>0.2</version>
+        <version>0.3</version>
     </parent>
     <artifactId>dependency-analyser</artifactId>
-    <version>0.2</version>
+    <version>0.3</version>
     <dependencies>
         <dependency>
             <groupId>com.redhat.hacbs</groupId>
