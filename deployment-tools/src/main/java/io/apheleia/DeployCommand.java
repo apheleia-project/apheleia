@@ -60,7 +60,7 @@ import picocli.CommandLine;
 @CommandLine.Command
 public class DeployCommand implements Runnable {
 
-    static final int CURRENT_VERSION = 2;
+    static final int CURRENT_VERSION = 3;
     public static final String APHELIA_DEPLOYED = "io.aphelia/deployed";
 
     @Inject
@@ -111,14 +111,12 @@ public class DeployCommand implements Runnable {
             int total = rebuiltArtifactMap.size();
             int count = 0;
             for (var e : rebuiltArtifactMap.entrySet()) {
-
-                System.out.println("COUNT: " + (count++) + "/" + total);
                 try {
                     boolean deploy = false;
                     for (var i : e.getValue()) {
                         if (i.getMetadata().getAnnotations() != null) {
                             String version = i.getMetadata().getAnnotations().get(APHELIA_DEPLOYED);
-                            if (version == null || Integer.parseInt(version) < CURRENT_VERSION) {
+                            if (version == null || Integer.parseInt(version) != CURRENT_VERSION) {
                                 deploy = true;
                                 break;
                             }
@@ -212,21 +210,22 @@ public class DeployCommand implements Runnable {
                         } catch (IOException ex) {
                             throw new RuntimeException(ex);
                         }
+
+                        for (var i : e.getValue()) {
+                            rebuildArtifacts.withName(i.getMetadata().getName()).edit(new UnaryOperator<RebuiltArtifact>() {
+                                @Override
+                                public RebuiltArtifact apply(RebuiltArtifact rebuiltArtifact) {
+                                    if (rebuiltArtifact.getMetadata().getAnnotations() == null) {
+                                        rebuiltArtifact.getMetadata().setAnnotations(new HashMap<>());
+                                    }
+                                    rebuiltArtifact.getMetadata().getAnnotations().put(APHELIA_DEPLOYED,
+                                            Integer.toString(CURRENT_VERSION));
+                                    return rebuiltArtifact;
+                                }
+                            });
+                        }
                     } else {
                         System.err.println("Failed to download " + e.getKey());
-                    }
-                    for (var i : e.getValue()) {
-                        rebuildArtifacts.withName(i.getMetadata().getName()).edit(new UnaryOperator<RebuiltArtifact>() {
-                            @Override
-                            public RebuiltArtifact apply(RebuiltArtifact rebuiltArtifact) {
-                                if (rebuiltArtifact.getMetadata().getAnnotations() == null) {
-                                    rebuiltArtifact.getMetadata().setAnnotations(new HashMap<>());
-                                }
-                                rebuiltArtifact.getMetadata().getAnnotations().put(APHELIA_DEPLOYED,
-                                        Integer.toString(CURRENT_VERSION));
-                                return rebuiltArtifact;
-                            }
-                        });
                     }
                 } catch (Exception ex) {
                     Log.errorf(ex, "Failed to handle image for %s",

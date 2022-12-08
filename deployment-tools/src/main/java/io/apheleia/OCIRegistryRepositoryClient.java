@@ -106,8 +106,26 @@ public class OCIRegistryRepositoryClient {
 
     public Optional<Path> extractImage(String image) {
         RegistryClient registryClient = getRegistryClient();
-        registryClient.configureBasicAuth();
+        try {
+            return downloadFromRepo(image, registryClient);
+        } catch (RegistryUnauthorizedException e) {
+            try {
+                //this is quay specific possibly?
+                String wwwAuthenticate = "Bearer realm=\"https://" + registry + "/v2/auth\",service=\"" + registry
+                        + "\",scope=\"repository:" + owner + "/" + repository + ":pull\"";
+                registryClient.authPullByWwwAuthenticate(wwwAuthenticate);
+                return downloadFromRepo(image, registryClient);
+            } catch (RegistryUnauthorizedException ex) {
+                ex.printStackTrace();
+                Log.errorf("Failed to authenticate against registry %s/%s/%s", registry, owner, repository);
+                return Optional.empty();
+            } catch (RegistryException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+    }
 
+    private Optional<Path> downloadFromRepo(String image, RegistryClient registryClient) throws RegistryUnauthorizedException {
         try {
             ManifestAndDigest<ManifestTemplate> manifestAndDigest = registryClient.pullManifest(image, ManifestTemplate.class);
 
@@ -117,8 +135,7 @@ public class OCIRegistryRepositoryClient {
             String digestHash = descriptorDigest.getHash();
             return getLocalCachePath(registryClient, manifest, digestHash);
         } catch (RegistryUnauthorizedException ioe) {
-            Log.errorf("Failed to authenticate against registry %s/%s/%s", registry, owner, repository);
-            return Optional.empty();
+            throw ioe;
         } catch (IOException | RegistryException ioe) {
             Throwable cause = ioe.getCause();
             while (cause != null) {
