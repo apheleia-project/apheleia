@@ -114,7 +114,7 @@ public class AnalyserCommand implements Runnable {
         Files.walkFileTree(mavenRepo, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                if (file.getFileName().toString().endsWith(".jar")) {
+                if (file.getFileName().toString().endsWith(".jar") && !file.getFileName().toString().endsWith("-runner.jar")) {
                     ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file), file.getFileName().toString(), (s) -> {
                         if (s.equals("module-info")) {
                             return;
