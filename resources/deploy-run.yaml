@@ -12,3 +12,5 @@ spec:
       value: "237843776254"
     - name: REPO
       value: https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/
+    - name: FORCE
+      value: false

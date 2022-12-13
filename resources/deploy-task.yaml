@@ -13,6 +13,9 @@ spec:
       type: string
     - name: REPO
       type: string
+    - name: FORCE
+      type: string
+      default: false
   steps:
     - name: deploy
       image: quay.io/sdouglas/apheleia:latest
@@ -24,6 +27,8 @@ spec:
           value: $(params.OWNER)
         - name: REPO
           value: $(params.REPO)
+        - name: FORCE
+          value: $(params.FORCE)
         - name: QUAY_TOKEN
           valueFrom:
             secretKeyRef:
