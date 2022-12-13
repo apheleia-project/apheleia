@@ -1,25 +1,5 @@
 package io.apheleia;
 
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-import com.redhat.hacbs.resources.model.v1alpha1.ArtifactBuild;
-import com.redhat.hacbs.resources.util.HashUtil;
-import com.redhat.hacbs.resources.util.ResourceNameUtils;
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.dsl.Resource;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
-import io.quarkus.runtime.Quarkus;
-import org.cyclonedx.BomGeneratorFactory;
-import org.cyclonedx.CycloneDxSchema;
-import org.cyclonedx.generators.json.BomJsonGenerator;
-import org.cyclonedx.model.Bom;
-import org.cyclonedx.model.Component;
-import org.cyclonedx.model.Property;
-import picocli.CommandLine;
-
-import javax.enterprise.inject.Instance;
-import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -34,9 +14,31 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
+
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
+
+import org.cyclonedx.BomGeneratorFactory;
+import org.cyclonedx.CycloneDxSchema;
+import org.cyclonedx.generators.json.BomJsonGenerator;
+import org.cyclonedx.model.Bom;
+import org.cyclonedx.model.Component;
+import org.cyclonedx.model.Property;
+
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+import com.redhat.hacbs.resources.model.v1alpha1.ArtifactBuild;
+import com.redhat.hacbs.resources.util.HashUtil;
+import com.redhat.hacbs.resources.util.ResourceNameUtils;
+
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.dsl.Resource;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import io.quarkus.runtime.Quarkus;
+import picocli.CommandLine;
 
 @TopCommand
 @CommandLine.Command
@@ -117,12 +119,14 @@ public class AnalyserCommand implements Runnable {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 if (file.getFileName().toString().endsWith(".jar") && !file.getFileName().toString().endsWith("-runner.jar")) {
-                    ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file), file.getFileName().toString(), (s, b) -> {
-                        if (s.equals("module-info")) {
-                            return;
-                        }
-                        untrackedCommunityClassesForMaven.computeIfAbsent(s, (a) -> new HashMap<>()).put(file, HashUtil.sha1(b));
-                    });
+                    ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file), file.getFileName().toString(),
+                            (s, b) -> {
+                                if (s.equals("module-info")) {
+                                    return;
+                                }
+                                untrackedCommunityClassesForMaven.computeIfAbsent(s, (a) -> new HashMap<>()).put(file,
+                                        HashUtil.sha1(b));
+                            });
                 }
                 return FileVisitResult.CONTINUE;
             }
@@ -176,10 +180,11 @@ public class AnalyserCommand implements Runnable {
                                     if (filtered.size() == 1) {
                                         for (var jar : filtered) {
                                             if (additional.add(jar)) {
-                                                Log.infof("Community jar " + jar.getFileName() + " found in " + path.relativize(file));
+                                                Log.infof("Community jar " + jar.getFileName() + " found in "
+                                                        + path.relativize(file));
                                             }
                                         }
-                                    } else if (filtered.size() > 1){
+                                    } else if (filtered.size() > 1) {
                                         multiplesToResolve.add(new HashSet<>(filtered));
                                     } else {
                                         multiplesToResolve.add(new HashSet<>(jars.keySet()));
@@ -188,7 +193,8 @@ public class AnalyserCommand implements Runnable {
                                 } else {
                                     for (var jar : jars.entrySet()) {
                                         if (additional.add(jar.getKey())) {
-                                            Log.infof("Community jar " + jar.getKey().getFileName() + " found in " + path.relativize(file));
+                                            Log.infof("Community jar " + jar.getKey().getFileName() + " found in "
+                                                    + path.relativize(file));
                                         }
                                     }
                                 }
