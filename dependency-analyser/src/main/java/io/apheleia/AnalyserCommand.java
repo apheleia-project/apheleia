@@ -1,5 +1,25 @@
 package io.apheleia;
 
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+import com.redhat.hacbs.resources.model.v1alpha1.ArtifactBuild;
+import com.redhat.hacbs.resources.util.HashUtil;
+import com.redhat.hacbs.resources.util.ResourceNameUtils;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.dsl.Resource;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import io.quarkus.runtime.Quarkus;
+import org.cyclonedx.BomGeneratorFactory;
+import org.cyclonedx.CycloneDxSchema;
+import org.cyclonedx.generators.json.BomJsonGenerator;
+import org.cyclonedx.model.Bom;
+import org.cyclonedx.model.Component;
+import org.cyclonedx.model.Property;
+import picocli.CommandLine;
+
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -8,34 +28,15 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.function.UnaryOperator;
-
-import javax.enterprise.inject.Instance;
-import javax.inject.Inject;
-
-import org.cyclonedx.BomGeneratorFactory;
-import org.cyclonedx.CycloneDxSchema;
-import org.cyclonedx.generators.json.BomJsonGenerator;
-import org.cyclonedx.model.Bom;
-import org.cyclonedx.model.Component;
-import org.cyclonedx.model.Property;
-
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-import com.redhat.hacbs.resources.model.v1alpha1.ArtifactBuild;
-import com.redhat.hacbs.resources.util.ResourceNameUtils;
-
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.dsl.Resource;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
-import io.quarkus.runtime.Quarkus;
-import picocli.CommandLine;
 
 @TopCommand
 @CommandLine.Command
@@ -110,16 +111,17 @@ public class AnalyserCommand implements Runnable {
     boolean doAnalysis(Set<String> gavs, Set<TrackingData> trackingData) throws IOException {
         //scan the local maven repo first
 
-        Map<String, List<Path>> untrackedCommunityClassesForMaven = new HashMap<>();
+        //map of class name -> path -> hash
+        Map<String, Map<Path, String>> untrackedCommunityClassesForMaven = new HashMap<>();
         Files.walkFileTree(mavenRepo, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 if (file.getFileName().toString().endsWith(".jar") && !file.getFileName().toString().endsWith("-runner.jar")) {
-                    ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file), file.getFileName().toString(), (s) -> {
+                    ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file), file.getFileName().toString(), (s, b) -> {
                         if (s.equals("module-info")) {
                             return;
                         }
-                        untrackedCommunityClassesForMaven.computeIfAbsent(s, (a) -> new ArrayList<>()).add(file);
+                        untrackedCommunityClassesForMaven.computeIfAbsent(s, (a) -> new HashMap<>()).put(file, HashUtil.sha1(b));
                     });
                 }
                 return FileVisitResult.CONTINUE;
@@ -142,6 +144,16 @@ public class AnalyserCommand implements Runnable {
         Log.infof("Root paths %s", paths);
 
         Set<Path> additional = new HashSet<>();
+        Set<Set<Path>> multiplesToResolve = new TreeSet<>(new Comparator<Set<Path>>() {
+            @Override
+            public int compare(Set<Path> o1, Set<Path> o2) {
+                int v = Integer.compare(o1.size(), o2.size());
+                if (v == 0) {
+                    return o1.toString().compareTo(o2.toString());
+                }
+                return v;
+            }
+        });
 
         for (var path : paths) {
             Files.walkFileTree(path, new SimpleFileVisitor<>() {
@@ -150,28 +162,34 @@ public class AnalyserCommand implements Runnable {
                     var fileName = file.getFileName().toString();
                     try (var contents = Files.newInputStream(file)) {
                         Log.debugf("Processing %s", fileName);
-                        var jarData = ClassFileTracker.readTrackingDataFromFile(contents, fileName, (s) -> {
+                        var jarData = ClassFileTracker.readTrackingDataFromFile(contents, fileName, (s, b) -> {
                             if (untrackedCommunityClassesForMaven.containsKey(s)) {
                                 var jars = untrackedCommunityClassesForMaven.get(s);
                                 var filtered = new ArrayList<Path>();
                                 if (jars.size() > 1) {
-                                    for (var i : jars) {
-                                        try {
-                                            if (Files.size(file) == Files.size(i)) {
-                                                filtered.add(i);
-                                            }
-                                        } catch (IOException e) {
-                                            throw new RuntimeException(e);
+                                    var thisHash = HashUtil.sha1(b);
+                                    for (var i : jars.entrySet()) {
+                                        if (i.getValue().equals(thisHash)) {
+                                            filtered.add(i.getKey());
                                         }
                                     }
                                     if (filtered.size() == 1) {
-                                        jars = filtered;
+                                        for (var jar : filtered) {
+                                            if (additional.add(jar)) {
+                                                Log.infof("Community jar " + jar.getFileName() + " found in " + path.relativize(file));
+                                            }
+                                        }
+                                    } else if (filtered.size() > 1){
+                                        multiplesToResolve.add(new HashSet<>(filtered));
+                                    } else {
+                                        multiplesToResolve.add(new HashSet<>(jars.keySet()));
                                     }
-                                }
 
-                                for (var jar : jars) {
-                                    if (additional.add(jar)) {
-                                        Log.infof("Community jar " + jar.getFileName() + " found in " + path.relativize(file));
+                                } else {
+                                    for (var jar : jars.entrySet()) {
+                                        if (additional.add(jar.getKey())) {
+                                            Log.infof("Community jar " + jar.getKey().getFileName() + " found in " + path.relativize(file));
+                                        }
                                     }
                                 }
                             }
@@ -192,6 +210,19 @@ public class AnalyserCommand implements Runnable {
 
                 }
             });
+        }
+        for (var i : multiplesToResolve) {
+            boolean alreadyResolved = false;
+            for (var b : i) {
+                if (additional.contains(b)) {
+                    alreadyResolved = true;
+                    break;
+                }
+            }
+            if (!alreadyResolved) {
+                Log.errorf("Unable to resolve a multi-jar situation, adding all versions %s", i);
+                additional.addAll(i);
+            }
         }
         //now figure out the additional GAV's
         for (var i : additional) {
