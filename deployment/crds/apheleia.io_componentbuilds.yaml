@@ -68,22 +68,20 @@ spec:
               artifactState:
                 additionalProperties:
                   properties:
-                    path:
+                    artifactBuild:
                       type: string
-                    private:
+                    done:
                       type: boolean
-                    scmType:
-                      type: string
-                    scmURL:
-                      type: string
-                    tag:
-                      type: string
+                    failed:
+                      type: boolean
                   type: object
                 type: object
               message:
                 type: string
               outstanding:
                 type: integer
+              resultNotified:
+                type: boolean
               state:
                 type: string
             type: object

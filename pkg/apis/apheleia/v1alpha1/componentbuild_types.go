@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	ComponentBuildFailed     = "ComponentBuildFailed"
-	ComponentBuildComplete   = "ComponentBuildComplete"
-	ComponentBuildInProgress = "ComponentBuildBuildInProgress"
+	ComponentBuildStateFailed     = "ComponentBuildFailed"
+	ComponentBuildStateComplete   = "ComponentBuildComplete"
+	ComponentBuildStateInProgress = "ComponentBuildBuildInProgress"
 )
 
 type ComponentBuildSpec struct {
@@ -17,10 +17,11 @@ type ComponentBuildSpec struct {
 }
 
 type ComponentBuildStatus struct {
-	State         string                   `json:"state,omitempty"`
-	Outstanding   int                      `json:"outstanding,omitempty"`
-	ArtifactState map[string]ArtifactState `json:"artifactState,omitempty"`
-	Message       string                   `json:"message,omitempty"`
+	State          string                   `json:"state,omitempty"`
+	Outstanding    int                      `json:"outstanding,omitempty"`
+	ArtifactState  map[string]ArtifactState `json:"artifactState,omitempty"`
+	Message        string                   `json:"message,omitempty"`
+	ResultNotified bool                     `json:"resultNotified,omitempty"`
 }
 
 //type ArtifactBuildState string
@@ -52,9 +53,7 @@ type ComponentBuildList struct {
 }
 
 type ArtifactState struct {
-	SCMURL  string `json:"scmURL,omitempty"`
-	SCMType string `json:"scmType,omitempty"`
-	Tag     string `json:"tag,omitempty"`
-	Path    string `json:"path,omitempty"`
-	Private bool   `json:"private,omitempty"`
+	ArtifactBuild string `json:"artifactBuild,omitempty"`
+	Done          bool   `json:"done,omitempty"`
+	Failed        bool   `json:"failed,omitempty"`
 }
