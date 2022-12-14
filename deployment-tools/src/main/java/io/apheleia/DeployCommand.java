@@ -1,21 +1,24 @@
 package io.apheleia;
 
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.codeartifact.AWSCodeArtifactClientBuilder;
-import com.amazonaws.services.codeartifact.model.DeletePackageVersionsRequest;
-import com.amazonaws.services.codeartifact.model.GetAuthorizationTokenRequest;
-import com.amazonaws.services.codeartifact.model.PackageFormat;
-import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-import io.apheleia.kube.JBSConfig;
-import io.apheleia.kube.RebuiltArtifact;
-import io.fabric8.kubernetes.api.model.KubernetesResourceList;
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.dsl.MixedOperation;
-import io.fabric8.kubernetes.client.dsl.Resource;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.UnaryOperator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import javax.inject.Inject;
+
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
 import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
@@ -33,25 +36,25 @@ import org.eclipse.aether.transport.file.FileTransporterFactory;
 import org.eclipse.aether.transport.http.HttpTransporterFactory;
 import org.eclipse.aether.util.repository.AuthenticationBuilder;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import picocli.CommandLine;
 
-import javax.inject.Inject;
-import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.UnaryOperator;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.codeartifact.AWSCodeArtifactClientBuilder;
+import com.amazonaws.services.codeartifact.model.DeletePackageVersionsRequest;
+import com.amazonaws.services.codeartifact.model.GetAuthorizationTokenRequest;
+import com.amazonaws.services.codeartifact.model.PackageFormat;
+import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+
+import io.apheleia.kube.JBSConfig;
+import io.apheleia.kube.RebuiltArtifact;
+import io.fabric8.kubernetes.api.model.KubernetesResourceList;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.dsl.MixedOperation;
+import io.fabric8.kubernetes.client.dsl.Resource;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import picocli.CommandLine;
 
 @TopCommand
 @CommandLine.Command
@@ -96,9 +99,9 @@ public class DeployCommand implements Runnable {
             RemoteRepository distRepo = new RemoteRepository.Builder("repo",
                     "default",
                     repo)
-                    .setAuthentication(new AuthenticationBuilder().addUsername("aws")
-                            .addPassword(token).build())
-                    .build();
+                            .setAuthentication(new AuthenticationBuilder().addUsername("aws")
+                                    .addPassword(token).build())
+                            .build();
 
             MixedOperation<RebuiltArtifact, KubernetesResourceList<RebuiltArtifact>, Resource<RebuiltArtifact>> rebuildArtifacts = client
                     .resources(RebuiltArtifact.class);
