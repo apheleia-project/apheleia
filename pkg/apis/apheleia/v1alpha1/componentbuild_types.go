@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	"github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -12,8 +11,9 @@ const (
 )
 
 type ComponentBuildSpec struct {
-	v1alpha1.SCMInfo `json:",inline"`
-	Artifacts        []string `json:"artifacts,omitempty"`
+	SCMURL    string   `json:"scmURL,omitempty"`
+	Tag       string   `json:"tag,omitempty"`
+	Artifacts []string `json:"artifacts,omitempty"`
 }
 
 type ComponentBuildStatus struct {

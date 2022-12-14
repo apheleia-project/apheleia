@@ -94,7 +94,7 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 	}
 	abrMap := map[string]*jvmbs.ArtifactBuild{}
 	abrList := jvmbs.ArtifactBuildList{}
-	err := r.client.List(ctx, &abrList)
+	err := r.client.List(ctx, &abrList, client.InNamespace(cb.Namespace))
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -156,7 +156,7 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 
 func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) (reconcile.Result, error) {
 	cbList := v1alpha1.ComponentBuildList{}
-	err := r.client.List(ctx, &cbList)
+	err := r.client.List(ctx, &cbList, client.InNamespace(abr.Namespace))
 	if err != nil {
 		return reconcile.Result{}, err
 	}

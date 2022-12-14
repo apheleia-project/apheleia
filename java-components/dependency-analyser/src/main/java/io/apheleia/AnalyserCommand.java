@@ -1,5 +1,23 @@
 package io.apheleia;
 
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+import com.redhat.hacbs.resources.util.HashUtil;
+import io.apheleia.kube.ComponentBuild;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import io.quarkus.runtime.Quarkus;
+import org.cyclonedx.BomGeneratorFactory;
+import org.cyclonedx.CycloneDxSchema;
+import org.cyclonedx.generators.json.BomJsonGenerator;
+import org.cyclonedx.model.Bom;
+import org.cyclonedx.model.Component;
+import org.cyclonedx.model.Property;
+import picocli.CommandLine;
+
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -11,35 +29,13 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
-
-import javax.enterprise.inject.Instance;
-import javax.inject.Inject;
-
-import org.cyclonedx.BomGeneratorFactory;
-import org.cyclonedx.CycloneDxSchema;
-import org.cyclonedx.generators.json.BomJsonGenerator;
-import org.cyclonedx.model.Bom;
-import org.cyclonedx.model.Component;
-import org.cyclonedx.model.Property;
-
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-import com.redhat.hacbs.resources.model.v1alpha1.ArtifactBuild;
-import com.redhat.hacbs.resources.util.HashUtil;
-import com.redhat.hacbs.resources.util.ResourceNameUtils;
-
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.dsl.Resource;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
-import io.quarkus.runtime.Quarkus;
-import picocli.CommandLine;
 
 @TopCommand
 @CommandLine.Command
@@ -66,39 +62,42 @@ public class AnalyserCommand implements Runnable {
     @CommandLine.Parameters(description = "The paths to check for community artifacts. Can be files or directories.")
     List<Path> paths;
 
+    @CommandLine.Option(names = "--git-url")
+    String gitUrl;
+
+    @CommandLine.Option(names = "--tag")
+    String tag;
+
     @Override
     public void run() {
         try {
             Set<TrackingData> trackingData = new HashSet<>();
             Set<String> communityGavs = doAnalysis(trackingData);
             if (createArtifacts) {
+                if (gitUrl == null ||tag == null) {
+                    throw new RuntimeException("Cannot create Kubernetes artifacts if --tag and --git-url are not specified");
+                }
                 var c = client.get();
-                var abrc = c.resources(ArtifactBuild.class);
-                for (var i : communityGavs) {
-                    String name = ResourceNameUtils.nameFromGav(i);
-                    Log.infof("Creating/Updating %s", name);
-                    Resource<ArtifactBuild> artifactBuildResource = abrc.withName(name);
-                    var abr = artifactBuildResource.get();
-                    if (abr == null) {
-                        abr = new ArtifactBuild();
-                        abr.getMetadata().setName(name);
-                        abr.getSpec().setGav(i);
-                        abr.getMetadata().setAnnotations(new HashMap<>());
-                        abr.getMetadata().getAnnotations().put("aphelaia.io/last-used", "" + System.currentTimeMillis());
-                        c.resource(abr).createOrReplace();
-                    } else {
-                        artifactBuildResource.edit(new UnaryOperator<ArtifactBuild>() {
-                            @Override
-                            public ArtifactBuild apply(ArtifactBuild artifactBuild) {
-                                if (artifactBuild.getMetadata().getAnnotations() == null) {
-                                    artifactBuild.getMetadata().setAnnotations(new HashMap<>());
-                                }
-                                artifactBuild.getMetadata().getAnnotations().put("aphelaia.io/last-used",
-                                        "" + System.currentTimeMillis());
-                                return artifactBuild;
-                            }
-                        });
-                    }
+                var name = HashUtil.sha1(gitUrl + tag).substring(0, 30);
+                var res = c.resources(ComponentBuild.class).withName(name);
+                var existing = res.get();
+                if (existing != null) {
+                    res.edit(new UnaryOperator<ComponentBuild>() {
+                        @Override
+                        public ComponentBuild apply(ComponentBuild componentBuild) {
+                            var newArtifacts = new LinkedHashSet<>(componentBuild.getSpec().getArtifacts());
+                            newArtifacts.addAll(communityGavs);
+                            componentBuild.getSpec().setArtifacts(new ArrayList<>(newArtifacts));
+                            return componentBuild;
+                        }
+                    });
+                } else {
+                    ComponentBuild cm = new ComponentBuild();
+                    cm.getMetadata().setName(name);
+                    cm.getSpec().setScmURL(gitUrl);
+                    cm.getSpec().setTag(tag);
+                    cm.getSpec().setArtifacts(new ArrayList<>(communityGavs));
+                    c.resource(cm).createOrReplace();
                 }
             }
             if (!communityGavs.isEmpty()) {
