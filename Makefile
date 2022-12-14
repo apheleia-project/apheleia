@@ -36,7 +36,7 @@ generate-deepcopy-client:
 
 generate-crds:
 	hack/install-controller-gen.sh
-	"$(CONTROLLER_GEN)" "$(CRD_OPTIONS)" rbac:roleName=manager-role webhook paths=./pkg/apis/apheleia/v1alpha1 output:crd:artifacts:config=deploy/crds/base
+	"$(CONTROLLER_GEN)" "$(CRD_OPTIONS)" rbac:roleName=manager-role webhook paths=./pkg/apis/apheleia/v1alpha1 output:crd:artifacts:config=deployment/crds/
 
 generate: generate-crds generate-deepcopy-client
 

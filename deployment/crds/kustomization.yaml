@@ -1,0 +1,5 @@
+resources:
+  - apheleia.io_componentbuilds.yaml
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
