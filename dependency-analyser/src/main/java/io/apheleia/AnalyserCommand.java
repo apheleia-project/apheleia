@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
 
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
@@ -50,28 +51,30 @@ public class AnalyserCommand implements Runnable {
     @CommandLine.Option(names = "--allowed-sources", defaultValue = "redhat,rebuilt", split = ",")
     Set<String> allowedSources;
 
-    @CommandLine.Option(names = "--sbom-path")
+    @CommandLine.Option(names = "--sbom-path", description = "The path to generate a SBOM at")
     Path sbom;
 
-    @CommandLine.Option(names = "--maven-repo", required = true)
+    @CommandLine.Option(names = "--maven-repo", required = true, description = "The path to the local .m2/repsitory directory. Usually $HOME/.m2/repository")
     Path mavenRepo;
 
-    @CommandLine.Option(names = "--create-artifacts")
+    @CommandLine.Option(names = "--create-artifacts", description = "If the analyser should use the Kube API to create ArtifactBuild objects")
     boolean createArtifacts;
 
-    @CommandLine.Parameters
+    @CommandLine.Option(names = "--allowed-artifacts", description = "A list of regexes of artifacts that are allowed to come from community sources")
+    List<String> allowedArtifacts;
+
+    @CommandLine.Parameters(description = "The paths to check for community artifacts. Can be files or directories.")
     List<Path> paths;
 
     @Override
     public void run() {
         try {
-            Set<String> gavs = new HashSet<>();
             Set<TrackingData> trackingData = new HashSet<>();
-            var communityDeps = doAnalysis(gavs, trackingData);
+            Set<String> communityGavs = doAnalysis(trackingData);
             if (createArtifacts) {
                 var c = client.get();
                 var abrc = c.resources(ArtifactBuild.class);
-                for (var i : gavs) {
+                for (var i : communityGavs) {
                     String name = ResourceNameUtils.nameFromGav(i);
                     Log.infof("Creating/Updating %s", name);
                     Resource<ArtifactBuild> artifactBuildResource = abrc.withName(name);
@@ -98,7 +101,7 @@ public class AnalyserCommand implements Runnable {
                     }
                 }
             }
-            if (communityDeps) {
+            if (!communityGavs.isEmpty()) {
                 //exit with non-zero if there were community deps
                 Quarkus.asyncExit(1);
             } else {
@@ -110,7 +113,14 @@ public class AnalyserCommand implements Runnable {
         }
     }
 
-    boolean doAnalysis(Set<String> gavs, Set<TrackingData> trackingData) throws IOException {
+    Set<String> doAnalysis(Set<TrackingData> trackingData) throws IOException {
+        Set<String> communityGavs = new HashSet<>();
+        List<Pattern> allowedList = new ArrayList<>();
+        if (this.allowedArtifacts != null) {
+            for (var i : allowedArtifacts) {
+                allowedList.add(Pattern.compile(i));
+            }
+        }
         //scan the local maven repo first
 
         //map of class name -> path -> hash
@@ -206,7 +216,7 @@ public class AnalyserCommand implements Runnable {
                             if (data != null) {
                                 if (!allowedSources.contains(data.source)) {
                                     Log.debugf("Found GAV %s in %s", data.gav, fileName);
-                                    gavs.add(data.gav);
+                                    communityGavs.add(data.gav);
                                 }
                             }
                         }
@@ -240,20 +250,30 @@ public class AnalyserCommand implements Runnable {
                 Path artifact = version.getParent();
                 Path group = artifact.getParent();
                 String gav = group.getFileName() + ":" + artifact.getFileName() + ":" + version.getFileName();
-                gavs.add(gav);
+                communityGavs.add(gav);
                 trackingData.add(new TrackingData(gav, "community", Map.of()));
             } else {
                 Path version = i.getParent();
                 Path artifact = version.getParent();
                 var group = mavenRepo.relativize(artifact.getParent()).toString().replace("/", ".");
                 String gav = group + ":" + artifact.getFileName() + ":" + version.getFileName();
-                gavs.add(gav);
+                communityGavs.add(gav);
                 trackingData.add(new TrackingData(gav, "community", Map.of()));
             }
         }
 
-        System.err.println(gavs);
-        return !additional.isEmpty();
+        var it = communityGavs.iterator();
+        while (it.hasNext()) {
+            var item = it.next();
+            for (var i : allowedList) {
+                if (i.matcher(item).matches()) {
+                    Log.infof("Community dependency %s was allowed by specified pattern %s", item, i.pattern());
+                    it.remove();
+                }
+            }
+        }
+        System.err.println(communityGavs);
+        return communityGavs;
     }
 
     void writeSbom(Set<TrackingData> trackingData) throws IOException {
