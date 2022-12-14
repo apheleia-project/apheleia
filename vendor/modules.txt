@@ -140,8 +140,6 @@ github.com/json-iterator/go
 # github.com/kcp-dev/apimachinery v0.0.0-20220803185518-868856d14e8a
 ## explicit; go 1.18
 github.com/kcp-dev/apimachinery/pkg/cache
-github.com/kcp-dev/apimachinery/pkg/client
-github.com/kcp-dev/apimachinery/third_party/informers
 # github.com/kcp-dev/kcp/pkg/apis v0.8.2
 ## explicit; go 1.18
 # github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.1
@@ -234,11 +232,7 @@ github.com/prometheus/statsd_exporter/pkg/mapper/fsm
 # github.com/redhat-appstudio/jvm-build-service v0.0.0-20221207144101-cc1ad2b76716
 ## explicit; go 1.17
 github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1
-github.com/redhat-appstudio/jvm-build-service/pkg/controller
-github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/artifactbuild
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/clusterresourcequota
-github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/dependencybuild
-github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/jbsconfig
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/k8sresourcequota
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/pendingpipelinerun
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/systemconfig
@@ -254,7 +248,6 @@ github.com/tektoncd/pipeline/config
 github.com/tektoncd/pipeline/pkg/apis/config
 github.com/tektoncd/pipeline/pkg/apis/pipeline
 github.com/tektoncd/pipeline/pkg/apis/pipeline/pod
-github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1
 github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1
 github.com/tektoncd/pipeline/pkg/apis/resource/v1alpha1
 github.com/tektoncd/pipeline/pkg/apis/run/v1alpha1
@@ -653,6 +646,7 @@ k8s.io/client-go/applyconfigurations/storage/v1
 k8s.io/client-go/applyconfigurations/storage/v1alpha1
 k8s.io/client-go/applyconfigurations/storage/v1beta1
 k8s.io/client-go/discovery
+k8s.io/client-go/discovery/fake
 k8s.io/client-go/dynamic
 k8s.io/client-go/kubernetes
 k8s.io/client-go/kubernetes/scheme
@@ -862,7 +856,6 @@ sigs.k8s.io/controller-runtime/pkg/internal/httpserver
 sigs.k8s.io/controller-runtime/pkg/internal/log
 sigs.k8s.io/controller-runtime/pkg/internal/objectutil
 sigs.k8s.io/controller-runtime/pkg/internal/recorder
-sigs.k8s.io/controller-runtime/pkg/kcp
 sigs.k8s.io/controller-runtime/pkg/leaderelection
 sigs.k8s.io/controller-runtime/pkg/log
 sigs.k8s.io/controller-runtime/pkg/log/zap
