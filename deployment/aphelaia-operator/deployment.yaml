@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apheleia-operator
+  namespace: jvm-build-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apheleia-operator
+  template:
+    metadata:
+      labels:
+        app: apheleia-operator
+    spec:
+      containers:
+        - name: apheleia-operator
+          image: apheleia-operator
+          imagePullPolicy: Always
+          args:
+            - "--v=6"
+            - "--zap-log-level=6"
+            - "--zap-devel=true"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "500m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      serviceAccountName: apheleia-operator

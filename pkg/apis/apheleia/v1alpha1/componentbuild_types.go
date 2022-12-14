@@ -32,7 +32,7 @@ type ComponentBuildStatus struct {
 // +kubebuilder:resource:path=componentbuilds,scope=Namespaced
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.spec.scmURL`
 // +kubebuilder:printcolumn:name="Tag",type=string,JSONPath=`.spec.tag`
-// +kubebuilder:printcolumn:name="Outstanding",type=int,JSONPath=`.status.outstanding`
+// +kubebuilder:printcolumn:name="Outstanding",type=integer,JSONPath=`.status.outstanding`
 // +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.state`
 // ComponentBuild A build of an upstream component
 type ComponentBuild struct {

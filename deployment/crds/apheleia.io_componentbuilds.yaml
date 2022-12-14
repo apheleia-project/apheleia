@@ -25,7 +25,7 @@ spec:
       type: string
     - jsonPath: .status.outstanding
       name: Outstanding
-      type: int
+      type: integer
     - jsonPath: .status.state
       name: State
       type: string

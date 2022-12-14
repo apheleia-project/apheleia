@@ -1,0 +1,75 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: apheleia-operator
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+rules:
+  - apiGroups:
+      - jvmbuildservice.io
+    resources:
+      - artifactbuilds
+      - artifactbuilds/status
+      - rebuiltartifacts
+      - rebuiltartifacts/status
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apheleia.io
+    resources:
+      - componentbuilds
+      - componentbuilds/status
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+
+  - apiGroups:
+    - apiextensions.k8s.io
+    resources:
+    - customresourcedefinitions
+    verbs:
+    - get
+
+  - apiGroups:
+      - ''
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: apheleia-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: apheleia-operator
+subjects:
+  - kind: ServiceAccount
+    name: apheleia-operator
+    namespace: jvm-build-service
