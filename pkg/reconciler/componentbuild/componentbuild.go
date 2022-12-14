@@ -6,15 +6,18 @@ import (
 	"github.com/kcp-dev/logicalcluster/v2"
 	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"knative.dev/pkg/apis"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -71,7 +74,15 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 		}
 	}
 
-	if cberr != nil && abrerr != nil {
+	tr := v1beta1.TaskRun{}
+	trerr := r.client.Get(ctx, request.NamespacedName, &cb)
+	if trerr != nil {
+		if !errors.IsNotFound(trerr) {
+			log.Error(trerr, "Reconcile key %s as componentbuild unexpected error", request.NamespacedName.String())
+			return ctrl.Result{}, trerr
+		}
+	}
+	if cberr != nil && abrerr != nil && trerr != nil {
 		msg := "Reconcile key received not found errors for componentbuilds, artifactbuilds (probably deleted): " + request.NamespacedName.String()
 		log.Info(msg)
 		return ctrl.Result{}, nil
@@ -83,6 +94,8 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 
 	case abrerr == nil:
 		return r.handleArtifactBuildReceived(ctx, log, &abr)
+	case trerr == nil:
+		return r.handleTaskRunReceived(ctx, log, &tr)
 	}
 
 	return reconcile.Result{}, nil
@@ -254,6 +267,44 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 		}
 	}
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log logr.Logger, tr *v1beta1.TaskRun) (reconcile.Result, error) {
+
+	if tr.Status.CompletionTime == nil {
+		return reconcile.Result{}, nil
+	}
+	ownerRefs := tr.GetOwnerReferences()
+	if len(ownerRefs) == 0 {
+		msg := "taskrun missing onwerrefs %s:%s"
+		r.eventRecorder.Eventf(tr, v1.EventTypeWarning, msg, tr.Namespace, tr.Name)
+		log.Info(msg, tr.Namespace, tr.Name)
+		return reconcile.Result{}, nil
+	}
+	ownerName := ""
+	for _, ownerRef := range ownerRefs {
+		if strings.EqualFold(ownerRef.Kind, "componentbuild") || strings.EqualFold(ownerRef.Kind, "componentbuilds") {
+			ownerName = ownerRef.Name
+			break
+		}
+	}
+	if len(ownerName) == 0 {
+		msg := "taskrun missing componentbuild ownerrefs %s:%s"
+		r.eventRecorder.Eventf(tr, v1.EventTypeWarning, "MissingOwner", msg, tr.Namespace, tr.Name)
+		log.Info(msg, tr.Namespace, tr.Name)
+		return reconcile.Result{}, nil
+	}
+
+	key := types.NamespacedName{Namespace: tr.Namespace, Name: ownerName}
+	cb := v1alpha1.ComponentBuild{}
+	err := r.client.Get(ctx, key, &cb)
+	if err != nil {
+		msg := "get for taskrun %s:%s owning component build %s:%s yielded error %s"
+		r.eventRecorder.Eventf(tr, v1.EventTypeWarning, msg, tr.Namespace, tr.Name, tr.Namespace, ownerName, err.Error())
+		log.Error(err, fmt.Sprintf(msg, tr.Namespace, tr.Name, tr.Namespace, ownerName, err.Error()))
+		return reconcile.Result{}, err
+	}
+	return r.handleComponentBuildReceived(ctx, log, &cb)
 }
 
 func artifactState(abr *jvmbs.ArtifactBuild) v1alpha1.ArtifactState {
