@@ -2,11 +2,15 @@ package componentbuild
 
 import (
 	"context"
+	"fmt"
 	"github.com/kcp-dev/logicalcluster/v2"
 	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
+	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"knative.dev/pkg/apis"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -20,7 +24,8 @@ import (
 
 const (
 	//TODO eventually we'll need to decide if we want to make this tuneable
-	contextTimeout = 300 * time.Second
+	contextTimeout  = 300 * time.Second
+	DeployTaskLabel = "apheleia.io/deploy-task"
 )
 
 type ReconcileArtifactBuild struct {
@@ -84,14 +89,25 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 }
 
 func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) (reconcile.Result, error) {
-	if !cb.Status.ResultNotified && (cb.Status.State == v1alpha1.ComponentBuildStateComplete || cb.Status.State == v1alpha1.ComponentBuildStateFailed) {
-		err := r.notifyResult(ctx, log, cb)
-		if err != nil {
-			return reconcile.Result{}, err
+	completed := cb.Status.State == v1alpha1.ComponentBuildStateComplete || cb.Status.State == v1alpha1.ComponentBuildStateFailed
+	if completed {
+		if !cb.Status.ArtifactsDeployed {
+			err := r.deployArtifacts(ctx, log, cb)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			cb.Status.ResultNotified = true
+			return reconcile.Result{}, r.client.Status().Update(ctx, cb)
+		} else if !cb.Status.ResultNotified {
+			err := r.notifyResult(ctx, log, cb)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			cb.Status.ResultNotified = true
+			return reconcile.Result{}, r.client.Status().Update(ctx, cb)
 		}
-		cb.Status.ResultNotified = true
-		return reconcile.Result{}, r.client.Status().Update(ctx, cb)
 	}
+
 	abrMap := map[string]*jvmbs.ArtifactBuild{}
 	abrList := jvmbs.ArtifactBuildList{}
 	err := r.client.List(ctx, &abrList, client.InNamespace(cb.Namespace))
@@ -154,6 +170,50 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 	return nil
 }
 
+// Attempts to deploy all the artifacts from the namespace
+// Note that this is a generic 'deploy all' task that it is running
+// so other artifacts might be deployed as well
+func (r *ReconcileArtifactBuild) deployArtifacts(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) error {
+	//first look for an existing TaskRun
+	existing := v1beta1.TaskRunList{}
+	listOpts := &client.ListOptions{
+		Namespace:     cb.Namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{DeployTaskLabel: cb.Name}),
+	}
+	err := r.client.List(ctx, &existing, listOpts)
+	if err != nil {
+		return err
+	}
+	success := false
+	for _, t := range existing.Items {
+		if t.Status.CompletionTime != nil {
+			success = t.Status.GetCondition(apis.ConditionSucceeded).IsTrue()
+			if !success {
+				cb.Status.Message = fmt.Sprintf("Deploy failed, check TaskRun %s. To retry delete the TaskRun", t.Name)
+				return r.client.Status().Update(ctx, cb)
+			}
+		}
+	}
+	if success {
+		cb.Status.ArtifactsDeployed = true
+		cb.Status.Message = ""
+		return r.client.Status().Update(ctx, cb)
+	}
+	//now we need a TaskRun
+
+	tr := v1beta1.TaskRun{}
+	tr.GenerateName = cb.Name
+	tr.Namespace = cb.Namespace
+	tr.Labels = map[string]string{DeployTaskLabel: cb.Name}
+	tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
+	tr.Spec.Params = []v1beta1.Param{
+		{Name: "DOMAIN", Value: v1beta1.ArrayOrString{StringVal: "rhosak", Type: v1beta1.ParamTypeString}},
+		{Name: "OWNER", Value: v1beta1.ArrayOrString{StringVal: "237843776254", Type: v1beta1.ParamTypeString}},
+		{Name: "REPO", Value: v1beta1.ArrayOrString{StringVal: "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/", Type: v1beta1.ParamTypeString}},
+		{Name: "FORCE", Value: v1beta1.ArrayOrString{StringVal: "false", Type: v1beta1.ParamTypeString}},
+	}
+	return r.client.Create(ctx, &tr)
+}
 func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) (reconcile.Result, error) {
 	cbList := v1alpha1.ComponentBuildList{}
 	err := r.client.List(ctx, &cbList, client.InNamespace(abr.Namespace))

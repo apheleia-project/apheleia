@@ -4,7 +4,8 @@ metadata:
   generateName: deploy-
 spec:
   taskRef:
-    name: deploy
+    name: apheleia-deploy
+    kind: ClusterTask
   params:
     - name: DOMAIN
       value: rhosak

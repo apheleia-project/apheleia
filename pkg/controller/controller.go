@@ -66,18 +66,17 @@ func NewManager(cfg *rest.Config, options ctrl.Options) (ctrl.Manager, error) {
 	var err error
 
 	//if we are running this locally on the same cluster as the ckcp we want to ignore any synced pipeline runs
-	noKcp := labels.NewSelector()
-	requirement, lerr := labels.NewRequirement("internal.workload.kcp.dev/cluster", selection.DoesNotExist, []string{})
+	deployTask := labels.NewSelector()
+	requirement, lerr := labels.NewRequirement(componentbuild.DeployTaskLabel, selection.Exists, []string{})
 	if lerr != nil {
 		return nil, lerr
 	}
-	noKcp.Add(*requirement)
+	deployTask.Add(*requirement)
 	options.NewCache = cache.BuilderWithOptions(cache.Options{
 		SelectorsByObject: cache.SelectorsByObject{
-			&pipelinev1beta1.PipelineRun{}: {Label: noKcp},
-			&v1alpha1.ComponentBuild{}:     {},
-			&jvmbs.ArtifactBuild{}:         {},
-			&jvmbs.RebuiltArtifact{}:       {},
+			&v1alpha1.ComponentBuild{}: {},
+			&jvmbs.ArtifactBuild{}:     {},
+			&pipelinev1beta1.TaskRun{}: {Label: deployTask},
 		}})
 
 	mgr, err = ctrl.NewManager(cfg, options)

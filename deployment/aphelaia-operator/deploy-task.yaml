@@ -1,8 +1,8 @@
-# a placeholder for development; in a fully integrated system, this will come from the appstudio tekton bundle
+#Task that is used to deploy artifacts by the controller
 apiVersion: tekton.dev/v1beta1
-kind: Task
+kind: ClusterTask
 metadata:
-  name: deploy
+  name: apheleia-deploy
 spec:
   description: >-
     This Task can be used to deploy rebuilt artifacts to a maven repository.

@@ -17,11 +17,12 @@ type ComponentBuildSpec struct {
 }
 
 type ComponentBuildStatus struct {
-	State          string                   `json:"state,omitempty"`
-	Outstanding    int                      `json:"outstanding,omitempty"`
-	ArtifactState  map[string]ArtifactState `json:"artifactState,omitempty"`
-	Message        string                   `json:"message,omitempty"`
-	ResultNotified bool                     `json:"resultNotified,omitempty"`
+	State             string                   `json:"state,omitempty"`
+	Outstanding       int                      `json:"outstanding,omitempty"`
+	ArtifactState     map[string]ArtifactState `json:"artifactState,omitempty"`
+	Message           string                   `json:"message,omitempty"`
+	ArtifactsDeployed bool                     `json:"artifactsDeployed,omitempty"`
+	ResultNotified    bool                     `json:"resultNotified,omitempty"`
 }
 
 //type ArtifactBuildState string
@@ -34,13 +35,15 @@ type ComponentBuildStatus struct {
 // +kubebuilder:printcolumn:name="Tag",type=string,JSONPath=`.spec.tag`
 // +kubebuilder:printcolumn:name="Outstanding",type=integer,JSONPath=`.status.outstanding`
 // +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.state`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // ComponentBuild A build of an upstream component
 type ComponentBuild struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ComponentBuildSpec   `json:"spec"`
-	Status ComponentBuildStatus `json:"status,omitempty"`
+	Spec    ComponentBuildSpec   `json:"spec"`
+	Status  ComponentBuildStatus `json:"status,omitempty"`
+	Message string               `json:"message,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
