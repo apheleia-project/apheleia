@@ -102,14 +102,16 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 }
 
 func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) (reconcile.Result, error) {
+	log.Info("Handling ComponentBuild", "name", cb.Name, "outstanding", cb.Status.Outstanding, "state", cb.Status.State)
 	completed := cb.Status.State == v1alpha1.ComponentBuildStateComplete || cb.Status.State == v1alpha1.ComponentBuildStateFailed
 	if completed {
 		if !cb.Status.ArtifactsDeployed {
+			log.Info("Deploying ComponentBuild Artifacts", "name", cb.Name, "outstanding", cb.Status.Outstanding, "state", cb.Status.State)
 			err := r.deployArtifacts(ctx, log, cb)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
-			cb.Status.ResultNotified = true
+			cb.Status.ArtifactsDeployed = true
 			return reconcile.Result{}, r.client.Status().Update(ctx, cb)
 		} else if !cb.Status.ResultNotified {
 			err := r.notifyResult(ctx, log, cb)
@@ -175,7 +177,7 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 		//if there are still some outstanding we reset the notification state
 		cb.Status.ResultNotified = false
 	}
-	return reconcile.Result{}, r.client.Status().Update(ctx, cb)
+	return r.checkOutstandingArtifactBuilds(ctx, cb)
 }
 
 func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) error {
@@ -215,7 +217,7 @@ func (r *ReconcileArtifactBuild) deployArtifacts(ctx context.Context, log logr.L
 	//now we need a TaskRun
 
 	tr := v1beta1.TaskRun{}
-	tr.GenerateName = cb.Name
+	tr.GenerateName = cb.Name + "-deploy-task"
 	tr.Namespace = cb.Namespace
 	tr.Labels = map[string]string{DeployTaskLabel: cb.Name}
 	tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
@@ -244,27 +246,35 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 			} else if done && !artifactState.Done {
 				i.Status.Outstanding++
 			}
-			if i.Status.Outstanding == 0 {
-				failed := false
-				for _, v := range i.Status.ArtifactState {
-					if v.Failed {
-						failed = true
-						break
-					}
-				}
-				if failed {
-					i.Status.State = v1alpha1.ComponentBuildStateFailed
-				} else {
-					i.Status.State = v1alpha1.ComponentBuildStateComplete
-				}
-			} else {
-				i.Status.State = v1alpha1.ComponentBuildStateInProgress
-			}
-			err := r.client.Status().Update(ctx, &i)
-			if err != nil {
-				return reconcile.Result{}, err
+			result, err2 := r.checkOutstandingArtifactBuilds(ctx, &i)
+			if err2 != nil {
+				return result, err2
 			}
 		}
+	}
+	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileArtifactBuild) checkOutstandingArtifactBuilds(ctx context.Context, i *v1alpha1.ComponentBuild) (reconcile.Result, error) {
+	if i.Status.Outstanding == 0 {
+		failed := false
+		for _, v := range i.Status.ArtifactState {
+			if v.Failed {
+				failed = true
+				break
+			}
+		}
+		if failed {
+			i.Status.State = v1alpha1.ComponentBuildStateFailed
+		} else {
+			i.Status.State = v1alpha1.ComponentBuildStateComplete
+		}
+	} else {
+		i.Status.State = v1alpha1.ComponentBuildStateInProgress
+	}
+	err := r.client.Status().Update(ctx, i)
+	if err != nil {
+		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, nil
 }
