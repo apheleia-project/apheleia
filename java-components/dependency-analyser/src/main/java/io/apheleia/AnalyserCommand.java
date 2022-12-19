@@ -1,23 +1,5 @@
 package io.apheleia;
 
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
-import com.redhat.hacbs.resources.util.HashUtil;
-import io.apheleia.kube.ComponentBuild;
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
-import io.quarkus.runtime.Quarkus;
-import org.cyclonedx.BomGeneratorFactory;
-import org.cyclonedx.CycloneDxSchema;
-import org.cyclonedx.generators.json.BomJsonGenerator;
-import org.cyclonedx.model.Bom;
-import org.cyclonedx.model.Component;
-import org.cyclonedx.model.Property;
-import picocli.CommandLine;
-
-import javax.enterprise.inject.Instance;
-import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -36,6 +18,27 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
+
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
+
+import org.cyclonedx.BomGeneratorFactory;
+import org.cyclonedx.CycloneDxSchema;
+import org.cyclonedx.generators.json.BomJsonGenerator;
+import org.cyclonedx.model.Bom;
+import org.cyclonedx.model.Component;
+import org.cyclonedx.model.Property;
+
+import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
+import com.redhat.hacbs.classfile.tracker.TrackingData;
+import com.redhat.hacbs.resources.util.HashUtil;
+
+import io.apheleia.kube.ComponentBuild;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.quarkus.logging.Log;
+import io.quarkus.picocli.runtime.annotations.TopCommand;
+import io.quarkus.runtime.Quarkus;
+import picocli.CommandLine;
 
 @TopCommand
 @CommandLine.Command
@@ -74,7 +77,7 @@ public class AnalyserCommand implements Runnable {
             Set<TrackingData> trackingData = new HashSet<>();
             Set<String> communityGavs = doAnalysis(trackingData);
             if (createArtifacts) {
-                if (gitUrl == null ||tag == null) {
+                if (gitUrl == null || tag == null) {
                     throw new RuntimeException("Cannot create Kubernetes artifacts if --tag and --git-url are not specified");
                 }
                 var c = client.get();
