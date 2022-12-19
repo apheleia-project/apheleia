@@ -95,11 +95,13 @@ public class AnalyserCommand implements Runnable {
                         }
                     });
                 } else {
+                    Set<String> allGavs = new TreeSet<>(communityGavs);
+                    trackingData.forEach((d) -> allGavs.add(d.gav));
                     ComponentBuild cm = new ComponentBuild();
                     cm.getMetadata().setName(name);
                     cm.getSpec().setScmURL(gitUrl);
                     cm.getSpec().setTag(tag);
-                    cm.getSpec().setArtifacts(new ArrayList<>(communityGavs));
+                    cm.getSpec().setArtifacts(new ArrayList<>(allGavs));
                     c.resource(cm).createOrReplace();
                 }
             }
