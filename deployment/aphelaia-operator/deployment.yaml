@@ -18,8 +18,8 @@ spec:
           image: apheleia-operator
           imagePullPolicy: Always
           args:
-            - "--v=6"
-            - "--zap-log-level=6"
+            - "--v=4"
+            - "--zap-log-level=4"
             - "--zap-devel=true"
           resources:
             requests:
