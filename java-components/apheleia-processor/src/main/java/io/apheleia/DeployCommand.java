@@ -133,76 +133,82 @@ public class DeployCommand implements Runnable {
                     Optional<Path> result = registryRepositoryClient.extractImage(image.substring(image.lastIndexOf(":") + 1));
                     if (result.isPresent()) {
                         try {
-                            Files.walkFileTree(result.get(), new SimpleFileVisitor<>() {
+                            Files.walkFileTree(result.get().resolve(OCIRegistryRepositoryClient.ARTIFACTS),
+                                    new SimpleFileVisitor<>() {
 
-                                @Override
-                                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                                        throws IOException {
-                                    try (var stream = Files.list(dir)) {
-                                        List<Path> files = stream.toList();
-                                        boolean hasPom = files.stream().anyMatch(s -> s.toString().endsWith(".pom"));
-                                        if (hasPom) {
+                                        @Override
+                                        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                                                throws IOException {
+                                            try (var stream = Files.list(dir)) {
+                                                List<Path> files = stream.toList();
+                                                boolean hasPom = files.stream().anyMatch(s -> s.toString().endsWith(".pom"));
+                                                if (hasPom) {
 
-                                            Path relative = result.get().relativize(dir);
-                                            String group = relative.getParent().getParent().toString().replace("/", ".");
-                                            String artifact = relative.getParent().getFileName().toString();
-                                            String version = dir.getFileName().toString();
-                                            System.out.println(
-                                                    "GROUP: " + group + " , ART:" + artifact + " , VERSION: " + version);
-                                            Pattern p = Pattern.compile(artifact + "-" + version + "(-(\\w+))?\\.(\\w+)");
+                                                    Path relative = result.get().relativize(dir);
+                                                    String group = relative.getParent().getParent().toString().replace("/",
+                                                            ".");
+                                                    String artifact = relative.getParent().getFileName().toString();
+                                                    String version = dir.getFileName().toString();
+                                                    System.out.println(
+                                                            "GROUP: " + group + " , ART:" + artifact + " , VERSION: "
+                                                                    + version);
+                                                    Pattern p = Pattern
+                                                            .compile(artifact + "-" + version + "(-(\\w+))?\\.(\\w+)");
 
-                                            try {
-                                                DeletePackageVersionsRequest request = new DeletePackageVersionsRequest()
-                                                        .withPackage(artifact)
-                                                        .withRepository("sdouglas-scratch")
-                                                        .withDomain("rhosak")
-                                                        .withFormat(PackageFormat.Maven)
-                                                        .withNamespace(group)
-                                                        .withVersions(version);
-                                                awsClient.deletePackageVersions(request);
-                                            } catch (ResourceNotFoundException e) {
-                                                //not found
-                                            }
-                                            DeployRequest deployRequest = new DeployRequest();
-                                            deployRequest.setRepository(distRepo);
-                                            for (var i : files) {
-                                                Matcher matcher = p.matcher(i.getFileName().toString());
-                                                if (matcher.matches()) {
-                                                    if (matcher.group(3).equals("jar")) {
-                                                        var in = Files.readAllBytes(i);
-                                                        var out = ClassFileTracker.addTrackingDataToJar(in,
-                                                                new TrackingData(group + ":" + artifact + ":" + version,
-                                                                        "rebuilt",
-                                                                        Collections.emptyMap()));
-                                                        Files.write(i, out);
-                                                        Files.writeString(
-                                                                i.getParent().resolve(i.getFileName().toString() + ".md5"),
-                                                                HashUtil.md5(out));
-                                                        Files.writeString(
-                                                                i.getParent().resolve(i.getFileName().toString() + ".sha1"),
-                                                                HashUtil.sha1(out));
+                                                    try {
+                                                        DeletePackageVersionsRequest request = new DeletePackageVersionsRequest()
+                                                                .withPackage(artifact)
+                                                                .withRepository("sdouglas-scratch")
+                                                                .withDomain("rhosak")
+                                                                .withFormat(PackageFormat.Maven)
+                                                                .withNamespace(group)
+                                                                .withVersions(version);
+                                                        awsClient.deletePackageVersions(request);
+                                                    } catch (ResourceNotFoundException e) {
+                                                        //not found
                                                     }
-                                                    Artifact jarArtifact = new DefaultArtifact(group, artifact,
-                                                            matcher.group(2),
-                                                            matcher.group(3),
-                                                            version);
-                                                    jarArtifact = jarArtifact.setFile(i.toFile());
-                                                    deployRequest.addArtifact(jarArtifact);
-                                                }
-                                            }
+                                                    DeployRequest deployRequest = new DeployRequest();
+                                                    deployRequest.setRepository(distRepo);
+                                                    for (var i : files) {
+                                                        Matcher matcher = p.matcher(i.getFileName().toString());
+                                                        if (matcher.matches()) {
+                                                            if (matcher.group(3).equals("jar")) {
+                                                                var in = Files.readAllBytes(i);
+                                                                var out = ClassFileTracker.addTrackingDataToJar(in,
+                                                                        new TrackingData(group + ":" + artifact + ":" + version,
+                                                                                "rebuilt",
+                                                                                Collections.emptyMap()));
+                                                                Files.write(i, out);
+                                                                Files.writeString(
+                                                                        i.getParent()
+                                                                                .resolve(i.getFileName().toString() + ".md5"),
+                                                                        HashUtil.md5(out));
+                                                                Files.writeString(
+                                                                        i.getParent()
+                                                                                .resolve(i.getFileName().toString() + ".sha1"),
+                                                                        HashUtil.sha1(out));
+                                                            }
+                                                            Artifact jarArtifact = new DefaultArtifact(group, artifact,
+                                                                    matcher.group(2),
+                                                                    matcher.group(3),
+                                                                    version);
+                                                            jarArtifact = jarArtifact.setFile(i.toFile());
+                                                            deployRequest.addArtifact(jarArtifact);
+                                                        }
+                                                    }
 
-                                            try {
-                                                system.deploy(session, deployRequest);
-                                            } catch (DeploymentException e) {
-                                                throw new RuntimeException(e);
+                                                    try {
+                                                        system.deploy(session, deployRequest);
+                                                    } catch (DeploymentException e) {
+                                                        throw new RuntimeException(e);
+                                                    }
+                                                }
+
+                                                return FileVisitResult.CONTINUE;
                                             }
                                         }
 
-                                        return FileVisitResult.CONTINUE;
-                                    }
-                                }
-
-                            });
+                                    });
                         } catch (IOException ex) {
                             throw new RuntimeException(ex);
                         }

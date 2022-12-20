@@ -6,7 +6,8 @@ import picocli.CommandLine;
 @TopCommand
 @CommandLine.Command(mixinStandardHelpOptions = true, subcommands = {
         DeployCommand.class,
-        AnalyserCommand.class
+        AnalyserCommand.class,
+        DownloadSources.class
 })
 public class EntryPoint {
 }

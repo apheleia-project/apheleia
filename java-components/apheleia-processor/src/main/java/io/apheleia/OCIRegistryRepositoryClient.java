@@ -18,8 +18,6 @@ import java.util.zip.GZIPInputStream;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.tools.jib.api.Credential;
@@ -39,6 +37,13 @@ import com.google.cloud.tools.jib.registry.RegistryClient;
 import io.quarkus.logging.Log;
 
 public class OCIRegistryRepositoryClient {
+
+    private static final String UNDERSCORE = "_";
+    private static final String HACBS = "hacbs";
+    public static final String ARTIFACTS = "artifacts";
+    private static final String DOT = ".";
+    private static final String SHA_1 = "sha1";
+    private static final String OCI_MEDIA_TYPE = "application/vnd.oci.image.manifest.v1+json";
 
     static final ObjectMapper MAPPER = new ObjectMapper();
     private final String registry;
@@ -94,10 +99,8 @@ public class OCIRegistryRepositoryClient {
             credential = null;
             Log.infof("No credential provided");
         }
-        Config config = ConfigProvider.getConfig();
-        Path cachePath = config.getValue("cache-path", Path.class);
         try {
-            this.cacheRoot = Files.createDirectories(Paths.get(cachePath.toAbsolutePath().toString(), HACBS));
+            this.cacheRoot = Files.createTempDirectory("apheleia");
             Log.debugf(" Using [%s] as local cache folder", cacheRoot);
         } catch (IOException ex) {
             throw new RuntimeException("could not create cache directory", ex);
@@ -168,7 +171,7 @@ public class OCIRegistryRepositoryClient {
             throws IOException {
         Path digestHashPath = cacheRoot.resolve(digestHash);
         if (existInLocalCache(digestHashPath)) {
-            return Optional.of(Paths.get(digestHashPath.toString(), ARTIFACTS));
+            return Optional.of(Paths.get(digestHashPath.toString()));
         } else {
             return pullFromRemoteAndCache(registryClient, manifest, digestHash, digestHashPath);
         }
@@ -182,23 +185,23 @@ public class OCIRegistryRepositoryClient {
         if (OCI_MEDIA_TYPE.equalsIgnoreCase(manifestMediaType)) {
             List<BuildableManifestTemplate.ContentDescriptorTemplate> layers = ((OciManifestTemplate) manifest).getLayers();
             if (layers.size() == 3) {
-                // Layer 2 is artifacts
-                BuildableManifestTemplate.ContentDescriptorTemplate artifactsLayer = layers.get(2);
-
-                Blob blob = registryClient.pullBlob(artifactsLayer.getDigest(), s -> {
-                }, s -> {
-                });
-
                 Path outputPath = Files.createDirectories(digestHashPath);
+                for (int i = 0; i < layers.size(); i++) {
+                    BuildableManifestTemplate.ContentDescriptorTemplate artifactsLayer = layers.get(i);
 
-                Path tarFile = Files.createFile(Paths.get(outputPath.toString(), digestHash + ".tar"));
-                try (OutputStream tarOutputStream = Files.newOutputStream(tarFile)) {
-                    blob.writeTo(tarOutputStream);
+                    Blob blob = registryClient.pullBlob(artifactsLayer.getDigest(), s -> {
+                    }, s -> {
+                    });
+
+                    Path tarFile = Files.createFile(Paths.get(outputPath.toString(), "layer-" + i + ".tar"));
+                    try (OutputStream tarOutputStream = Files.newOutputStream(tarFile)) {
+                        blob.writeTo(tarOutputStream);
+                    }
+                    try (InputStream tarInput = Files.newInputStream(tarFile)) {
+                        extractTarArchive(tarInput, outputPath.toString());
+                    }
                 }
-                try (InputStream tarInput = Files.newInputStream(tarFile)) {
-                    extractTarArchive(tarInput, outputPath.toString());
-                    return Optional.of(Paths.get(outputPath.toString(), ARTIFACTS));
-                }
+                return Optional.of(Paths.get(outputPath.toString()));
             } else {
                 Log.warnf("Unexpexted layer size %d. We expext 3", layers.size());
                 return Optional.empty();
@@ -251,11 +254,4 @@ public class OCIRegistryRepositoryClient {
             }
         }
     }
-
-    private static final String UNDERSCORE = "_";
-    private static final String HACBS = "hacbs";
-    private static final String ARTIFACTS = "artifacts";
-    private static final String DOT = ".";
-    private static final String SHA_1 = "sha1";
-    private static final String OCI_MEDIA_TYPE = "application/vnd.oci.image.manifest.v1+json";
 }
