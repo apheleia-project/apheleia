@@ -1,0 +1,7 @@
+apiVersion: apheleia.io/v1alpha1
+kind: ComponentBuild
+metadata:
+  generateName: simple-build-
+spec:
+  artifacts:
+    - javax.annotation:javax.annotation-api:1.3.2

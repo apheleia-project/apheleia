@@ -1,4 +1,4 @@
-package io.apheleia.kube;
+package io.apheleia.model;
 
 public class ModelConstants {
     public static final String GROUP = "apheleia.io";

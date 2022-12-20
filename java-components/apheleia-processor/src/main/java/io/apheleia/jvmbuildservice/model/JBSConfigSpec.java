@@ -1,4 +1,4 @@
-package io.apheleia.kube;
+package io.apheleia.jvmbuildservice.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

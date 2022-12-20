@@ -7,7 +7,7 @@
         <artifactId>apheleia</artifactId>
         <version>0.7-SNAPSHOT</version>
     </parent>
-    <artifactId>deployment-tools</artifactId>
+    <artifactId>apheleia-processor</artifactId>
     <version>0.7-SNAPSHOT</version>
     <dependencies>
         <dependency>
@@ -15,16 +15,8 @@
             <artifactId>hacbs-classfile-tracker</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpclient</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkiverse.amazonservices</groupId>
-            <artifactId>quarkus-amazon-s3</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>url-connection-client</artifactId>
+            <groupId>com.redhat.hacbs</groupId>
+            <artifactId>hacbs-resource-model</artifactId>
         </dependency>
         <dependency>
             <groupId>com.redhat.hacbs</groupId>
@@ -40,36 +32,27 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-client-reactive</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
             <artifactId>quarkus-kubernetes-client</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-container-image-jib</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-picocli</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-jgit</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.redhat.hacbs</groupId>
             <artifactId>hacbs-build-recipies-database</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.google.cloud.tools</groupId>
-            <artifactId>jib-core</artifactId>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-container-image-jib</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.aether</groupId>
-            <artifactId>aether-api</artifactId>
-        </dependency>
+            <groupId>com.google.cloud.tools</groupId>
+            <artifactId>jib-core</artifactId>
+        </dependency>        <dependency>
+        <groupId>org.eclipse.aether</groupId>
+        <artifactId>aether-api</artifactId>
+    </dependency>
         <dependency>
             <groupId>org.eclipse.aether</groupId>
             <artifactId>aether-spi</artifactId>
@@ -99,9 +82,10 @@
             <artifactId>maven-aether-provider</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-container-image-jib</artifactId>
-        </dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-codeartifact</artifactId>
+        <version>1.12.346</version>
+    </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
@@ -116,11 +100,6 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>localstack</artifactId>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-codeartifact</artifactId>
-            <version>1.12.346</version>
         </dependency>
         <dependency>
             <groupId>org.assertj</groupId>

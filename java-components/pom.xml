@@ -38,8 +38,7 @@
     </properties>
 
     <modules>
-        <module>deployment-tools</module>
-        <module>dependency-analyser</module>
+        <module>apheleia-processor</module>
     </modules>
 
     <dependencyManagement>

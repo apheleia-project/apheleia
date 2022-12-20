@@ -35,7 +35,6 @@ import org.eclipse.aether.spi.connector.transport.TransporterFactory;
 import org.eclipse.aether.transport.file.FileTransporterFactory;
 import org.eclipse.aether.transport.http.HttpTransporterFactory;
 import org.eclipse.aether.util.repository.AuthenticationBuilder;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.codeartifact.AWSCodeArtifactClientBuilder;
@@ -46,18 +45,16 @@ import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
 import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
 import com.redhat.hacbs.classfile.tracker.TrackingData;
 
-import io.apheleia.kube.JBSConfig;
-import io.apheleia.kube.RebuiltArtifact;
+import io.apheleia.jvmbuildservice.model.JBSConfig;
+import io.apheleia.jvmbuildservice.model.RebuiltArtifact;
 import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
 import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
 
-@TopCommand
-@CommandLine.Command
+@CommandLine.Command(name = "deploy")
 public class DeployCommand implements Runnable {
 
     static final int CURRENT_VERSION = 3;
@@ -66,17 +63,17 @@ public class DeployCommand implements Runnable {
     @Inject
     KubernetesClient client;
 
-    @ConfigProperty(name = "domain") //rhosak
+    @CommandLine.Option(names = "--domain", defaultValue = "rhosak")
     String domain;
 
-    @ConfigProperty(name = "owner") //237843776254
+    @CommandLine.Option(names = "--owner", defaultValue = "237843776254")
     String owner;
 
-    @ConfigProperty(name = "repo") //https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/
+    @CommandLine.Option(names = "--repo", defaultValue = "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/")
     String repo;
 
-    @ConfigProperty(name = "force", defaultValue = "false")
-    boolean force;
+    @CommandLine.Option(names = "--force", defaultValue = "false")
+    String force;
 
     public void run() {
         try {
@@ -113,7 +110,7 @@ public class DeployCommand implements Runnable {
             }
             for (var e : rebuiltArtifactMap.entrySet()) {
                 try {
-                    boolean deploy = force;
+                    boolean deploy = Boolean.parseBoolean(force);
                     if (!deploy) {
                         for (var i : e.getValue()) {
                             if (i.getMetadata().getAnnotations() != null) {

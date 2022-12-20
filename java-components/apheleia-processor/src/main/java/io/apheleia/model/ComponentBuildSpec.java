@@ -1,4 +1,4 @@
-package io.apheleia.kube;
+package io.apheleia.model;
 
 import java.util.ArrayList;
 import java.util.List;

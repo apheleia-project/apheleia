@@ -20,15 +20,17 @@ spec:
     - name: deploy
       image: quay.io/sdouglas/apheleia:latest
       imagePullPolicy: Always
+      args:
+        - "deploy"
+        - "--domain"
+        - $(params.DOMAIN)
+        - "--owner"
+        - $(params.OWNER)
+        - "--repo"
+        - $(params.REPO)
+        - "--force"
+        - $(params.FORCE)
       env:
-        - name: DOMAIN
-          value: $(params.DOMAIN)
-        - name: OWNER
-          value: $(params.OWNER)
-        - name: REPO
-          value: $(params.REPO)
-        - name: FORCE
-          value: $(params.FORCE)
         - name: QUAY_TOKEN
           valueFrom:
             secretKeyRef:

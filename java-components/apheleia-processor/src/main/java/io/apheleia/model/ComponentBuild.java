@@ -1,4 +1,4 @@
-package io.apheleia.kube;
+package io.apheleia.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -11,12 +11,12 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @Group(ModelConstants.GROUP)
 @Version(ModelConstants.VERSION)
 @JsonInclude(Include.NON_NULL)
-public class JBSConfig extends CustomResource<JBSConfigSpec, Void>
+public class ComponentBuild extends CustomResource<ComponentBuildSpec, Void>
         implements Namespaced {
 
     @Override
-    protected JBSConfigSpec initSpec() {
-        return new JBSConfigSpec();
+    protected ComponentBuildSpec initSpec() {
+        return new ComponentBuildSpec();
     }
 
 }

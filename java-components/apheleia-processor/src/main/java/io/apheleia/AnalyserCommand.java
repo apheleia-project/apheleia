@@ -33,15 +33,13 @@ import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
 import com.redhat.hacbs.classfile.tracker.TrackingData;
 import com.redhat.hacbs.resources.util.HashUtil;
 
-import io.apheleia.kube.ComponentBuild;
+import io.apheleia.model.ComponentBuild;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.logging.Log;
-import io.quarkus.picocli.runtime.annotations.TopCommand;
 import io.quarkus.runtime.Quarkus;
 import picocli.CommandLine;
 
-@TopCommand
-@CommandLine.Command
+@CommandLine.Command(name = "analyse", aliases = "analyze")
 public class AnalyserCommand implements Runnable {
 
     @Inject
