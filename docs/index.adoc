@@ -11,6 +11,9 @@ how data flows through the system.
 
 === JVM Build Service
 
+The JVM Build Service is a service that attempts to automatically build 3rd party components, and deploy them to quay.io
+in an image form. It also provides tools to work with these images, and serve them as standard maven artifacts.
+
 ==== Components
 
 JVM Build Service consists of the following components:
@@ -26,7 +29,7 @@ The cache is created in every user namespace. It is responsible for caching Mave
 Build Request Processor::
 
 This is a Java + Quarkus CLI tool that provides a host of different functionalities. This is packaged up into an image, and then run in different parts of various pipelines by the operator.
-
++
 In essence any custom logic that is needed in a pipeline goes in here, and then the operator will invoke it with the correct arguments. This is a single multitool rather than individual functions as experience has shown this is a lot easier to manage.
 
 Builder Images::
@@ -37,9 +40,9 @@ Build Data Repository::
 
 https://github.com/redhat-appstudio/jvm-build-data[This repository] contains information on how to build dependencies, and where their source code is located. For more information see <<build_data_repo>>.
 
-==== CRDS
+==== CRDs
 
-The JVM Build service provides the following CRDS. All CRDS are located in the https://github.com/redhat-appstudio/jvm-build-service/tree/main/deploy/crds/base[JVM Build Service repo]. They are generated from glang objects that reside https://github.com/redhat-appstudio/jvm-build-service/tree/main/pkg/apis/jvmbuildservice/v1alpha1[here].
+The JVM Build service provides the following CRDs. All CRDs are located in the https://github.com/redhat-appstudio/jvm-build-service/tree/main/deploy/crds/base[JVM Build Service repo]. They are generated from goang objects that reside https://github.com/redhat-appstudio/jvm-build-service/tree/main/pkg/apis/jvmbuildservice/v1alpha1[here].
 
 ===== ArtifactBuild
 
@@ -124,28 +127,35 @@ Apheleia consists of the following components:
 Apheleia Operator::
 
 This operator is responsible for orchestrating the additional workflows required by the RHOSAK team. In particular it will:
-
 - Reconcile on `ComponentBuild` objects and turn them into `ArtifactBuild` objects that can be built by the JVM build service.
 - Watch the state of `ArtifactBuild` objects and deploy the results to a Maven repository when everything has been built.
 
 Apheleia Processor::
-
++
 This is a Java + Quarkus CLI tool that provides a multiple functions. At present it supports the following commands:
-
++
 *analyse*
-
++
 This runs in the Jenkins pipeline, analyses the output of a build, and creates a `ComponentBuild` resource on the cluster that kicks off the build process.
-
++
 *deploy*
-
++
 This is run by the Operator as a Tekton task, although it can be run manually. This will
 deploy all built artifacts in the namespace to an AWS CodeArtifact repo.
-
++
 *download-sources*
-
++
 This will download all the sources from a `ComponentBuild` into a single `.tar.gz` file.
-
++
 For full details on the parameters it supports see the built-in usage help.
+
+==== CRDs
+
+ComponentBuild::
+
+This CRD represents the dependencies of a git commit, it consists of a repo + tag/commit pair that identifies the relevant build, as well as a list of identified dependencies.
++
+The Aphelelia operator looks at this list of dependencies and will attempt to build all of them from source, once this is complete it will deploy them to a maven repository.
 
 == Installation
 
@@ -167,11 +177,11 @@ This is managed by `deployment/tekton`. It simply creates a subscription to the 
 Install the JVM Build Service::
 
 This is controlled by `deployment/build-operator`. It references resources from the JVM Build service repo, defined by a specific commit. Every time code is committed to `main` in this repo new images are built automatically. These images are tagged under the git sha, so updating the service is a case of updating from the old git sha to the new commit.
-
++
 *Example of how to update the JVM Build Service*
-
++
 An example of the `kustomization.yaml` file is shown below:
-
++
 ```
 resources:
 - https://github.com/redhat-appstudio/jvm-build-service/deploy/crds/base?ref=2501bc0fa9c4e7ee135263bb9dc43d50a65a0e98
@@ -186,15 +196,14 @@ images:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 ```
-
++
 To update to a newer version I need to find the commit that I want to update to in the JVM Build service repo, and then replace all four instances of `2501bc0fa9c4e7ee135263bb9dc43d50a65a0e98` with the new commit, then run `deploy.sh` again.
-
++
 WARNING: The images reference look a lot like we are referencing an image by its hash, but it is actually a tag that matches a git commit. Every image is built with a tag that matches the commit it was built from.
 
 Deploy the Aphelia CRDS::
 
 This is managed by the `deploy/crds` directory. These CRDs must not be edited directly. If you have made changes to the golang objects that represent the cluster state, you will need to also generate new CRDS, to do this see the section <<generate_crds>>.
-
 
 === Namespace Setup
 
@@ -279,25 +288,81 @@ To activate the namespace run:
 WARNING: This config hard codes the quay.io user to `mk-ci-cd`. If you want a different user or repository you will need to update `deployment/namespace/config.yaml`. For full details of all config options see <<config_options>>. If you need to update the config run `setup-namespaces.sh` again after modifying the `config.yaml`.
 
 
-=== Generating the CRDS [[generate_crds]]
-
-TODO
-
-
-=== JVM Build Service Config Options [[config_options]]
-
-TODO:
-
-
 ```
 make generate
 ```
 
-=== Dealing With Missing Artifacts [[missing_artifacts]]
+== Users Guide
 
-To fix this we need to add additional information to the https://github.com/redhat-appstudio/jvm-build-data/tree/main/scm-info[build information repository]. Once this has been updated see the section on <<rebuilding_artifacts>> for instructions on how to re-run it.
+This section covers everything (hopefully) you need to know to perform builds with Aphelia.
 
-=== Dealing With Failed Builds [[failed_builds]]
+=== Flow Overview
+
+image::Apheleia Flow Chart.png
+
+The basic flow is summarised in the image above. The Apheleia dependency analyser is placed into the Jenkins pipeline after the build step. It Analyses the build and creates a `ComponentBuild` with the results. If this has no community dependencies then it will exit with a zero exit code, otherwise it will be non-zero and fail the pipeline.
+
+Once this `ComponentBuild` has been created the Apheleia operator will reconcile it. The operator will look at the dependencies, and attempt to create new `ArtifactBuild` objects to rebuild these dependencies. If the `ArtifactBuild` already exists then it will be linked to the existing object.
+
+This then triggers the JVM Build Service to attempt to build these objects, once they are built (or fail) the Apheleia operator will update the `ComponentBuild`, with the state. Once all builds are complete it will run the deploy task to deploy everything, and then kick off a new Jenkins build (TODO: This is not implemented yet).
+
+=== Viewing the ComponentBuild state
+
+You can list the ComponentBuild objects using:
+
+```
+kubectl get componentbuild
+```
+
+To view the full details you can run:
+
+```
+kubectl get componentbuild <name> -o yaml
+```
+
+You will get output similar to the below:
+
+```
+apiVersion: apheleia.io/v1alpha1
+kind: ComponentBuild
+metadata:
+  creationTimestamp: "2022-12-21T02:50:31Z"
+  generation: 1
+  name: 8210a253ee60e994319a414746e760
+  namespace: test-jvm-namespace
+  resourceVersion: "51445019"
+  uid: 7ccdc760-842d-497a-8bbc-e29aedd562f4
+spec:
+  artifacts:
+  - ch.qos.reload4j:reload4j:1.2.19
+  - com.fasterxml.jackson.core:jackson-annotations:2.13.3
+  - com.fasterxml.jackson.core:jackson-annotations:2.13.4
+  - com.fasterxml.jackson.core:jackson-databind:2.13.4.2
+  scmURL: test2
+  tag: test1
+status:
+  artifactState:
+    ch.qos.reload4j:reload4j:1.2.19:
+      artifactBuild: reload4j.1.2.19-96fb23de
+      done: true
+    com.fasterxml.jackson.core:jackson-annotations:2.13.3:
+      artifactBuild: jackson.annotations.2.13.3-745a8e63
+      done: true
+    com.fasterxml.jackson.core:jackson-annotations:2.13.4:
+      artifactBuild: jackson.annotations.2.13.4-43f4590b
+      done: true
+    com.fasterxml.jackson.core:jackson-databind:2.13.4.2:
+      artifactBuild: jackson.databind.2.13.4.2-50dca403 <1>
+      done: true <2>
+      failed: true <3>
+  state: ComponentBuildFailed
+```
+<1> This is the name of the JVM Build service `ArtifactBuild` object.
+<2> This indicates that the build has completed.
+<3> This tells us the build has failed.
+
+The state shows the current state of the artifacts, in particular the `done` flag will be true if they are completed,
+and the `failed` flag will be set if the build failed.
 
 === Re-Running Builds [[rebuilding_artifacts]]
 
@@ -313,4 +378,142 @@ You can also use the `jvmbuildservice.io/rebuild=failed` annotation to rebuild o
 kubectl annotate artifactbuild --all jvmbuildservice.io/rebuild=failed
 ```
 
+Generally when you are trying to fix a failure you will need to manually run the builds yourself.
+
+=== Dealing With Failed Builds
+
+In order to see why the build failed we need to look at the results from the JVM Build Service.
+
+The first step is to look at the state of the corresponding `ArtifactBuild`. If we want to figure out why `jackson-databind`
+failed above we would first execute the following command to view the ArtifactBuild state:
+
+```
+kubectl get artifactbuilds.jvmbuildservice.io jackson.databind.2.13.4.2-50dca403 -o yaml
+```
+
+We might get output as follows:
+
+```
+apiVersion: jvmbuildservice.io/v1alpha1
+kind: ArtifactBuild
+metadata:
+  creationTimestamp: "2022-12-21T02:50:31Z"
+  generation: 1
+  name: jackson.databind.2.13.4.2-50dca403
+  namespace: test-jvm-namespace
+  ownerReferences: <1>
+  - apiVersion: apheleia.io/v1alpha1
+    kind: ComponentBuild
+    name: 8210a253ee60e994319a414746e760
+    uid: 7ccdc760-842d-497a-8bbc-e29aedd562f4
+  - apiVersion: apheleia.io/v1alpha1
+    kind: ComponentBuild
+    name: f9606be9986d7cb2f50fd62d340a03
+    uid: d68fcd4c-2180-411b-966e-b1358646343d
+  resourceVersion: "51371901"
+  uid: f11a4b7f-b19b-4e79-ab8f-392bff80e25f
+spec:
+  gav: com.fasterxml.jackson.core:jackson-databind:2.13.4.2
+status:
+  scm:
+    scmType: git
+    scmURL: https://github.com/FasterXML/jackson-databind.git <2>
+    tag: jackson-databind-2.13.4.2
+  state: ArtifactBuildFailed <3>
+
+```
+<1> `ComponentBuild` objects own the `ArtifactBuild` objects they reference. If every ComponentBuild is deleted then so will the artifact builds.
+<2> This is the SCM information that was successfully discovered
+<3> This tells us the current state. In this case the build has failed.
+
+There are 2 main failure states we need to deal with, `ArtifactBuildMissing` and `ArtifactBuildFailed`.
+
+=== Dealing With Missing Artifacts (`ArtifactBuildMissing`) [[missing_artifacts]]
+
+If our build has ended up in this state then it means we need to add some SCM information into our build data repository.
+
+There are three possible causes of this state:
+
+- We could not figure out which repository the artifact comes from
+- We could not map the version to a tag in this repository
+- The pipeline failed for other reasons (e.g. network failure)
+
+The pipeline will be named <artifact-build-name>-scm-discovery-<random-string>. To view the pipeline logs
+you can do:
+
+```
+tkn pr list | grep jackson.databind.2.13.4.2-50dca403 <1>
+tkn pr logs jackson.databind.2.13.4.2-50dca403-<discoveredid> <2>
+```
+<1> Find the pipeline name.
+<2> Use the name from the first line to view the logs.
+
+This may be helpful to diagnose exactly why it failed.
+
+To fix missing SCM information we need to add additional information to the https://github.com/redhat-appstudio/jvm-build-data/tree/main/scm-info[build information repository]. Once this has been updated see the section on <<rebuilding_artifacts>> for instructions on how to re-run it.
+
+NOTE: This may be added into a private build information repo, see <<private_build_data_repos>> for more info.
+
+The SCM information for the `com.fasterxml.jackson.core:jackson-databind:2.13.4.2` above will be searched for in the following
+location, from most specific to least specific:
+
+```
+scm-info/com/fasterxml/jackson/core/_artifact/jackson-databind/_version/2.13.4.2/scm.yaml <1>
+scm-info/com/fasterxml/jackson/core/_artifact/jackson-databind/scm.yaml <2>
+scm-info/com/fasterxml/jackson/core/scm.yaml <3>
+```
+<1> This approach specifies the group-id, the artifact-id and the version. Note that the version matches based on 'less than', so older versions (e.g. 2.1) would still match, while newer versions would not.
+<2> These match based on the group-id and artifact-id. This approach is good for when a specific group-id is used in lots of different repositories.
+<3> These match based on the group-id. This is used when we know the majority of artifacts with the group id come from a single repo.
+
+Once we have identified where we can add a SCM info file. This file has the following format. Note that everything is optional
+except for the URL.
+
+```
+type: "git" <1>
+uri: "https://github.com/eclipse-ee4j/jaxb-stax-ex.git" <2>
+tagMapping: <3>
+  - pattern: (.*)-jre <4>
+    tag: v$1 <5>
+  - pattern: (\d+)\.(\d+)
+    tag: release-$1-$2
+  - pattern: 3.0
+    tag: jaxb-stax3-3.0
+legacyRepos: <6>
+  - type: "git"
+    uri: "https://github.com/javaee/metro-stax-ex.git"
+    path: "stax-ex" <7>
+
+```
+<1> The type is optional, at the moment only git is supported.
+<2> The primary URI to search
+<3> Mappings between a version and a tag. We attempt to do this automatically but it is not always successful.
+<4> If the version matches the regex then we look for a corresponding tag.
+<5> The tag to search for in the repo. `$n` can be used to substitute the regex capture groups, with $0 being the full match.
+<6> Additional repositories to search. This can be useful if a project has moved home over time.
+<7> Some projects are not in the root of the repo. The path tells us the directory they are in.
+
+Once we have added this information re-running the build should see it resolve this information, and it should then move to state `ArtifactBuildBuilding` (and hopefully eventually to `ArtifactBuildComplete`).
+
+
+== Placeholder Section Heading
+
+Everything after this is a placeholder
+
+
 == The Build Data Repository [[build_data_repo]]
+
+=== Private Build Data Repositories [[private_build_data_repos]]
+
+
+=== Dealing With Failed Builds [[failed_builds]]
+
+
+=== Generating the CRDS [[generate_crds]]
+
+To generate the CRDs you must run `make generate` after modifying the relevant go objects. These changes should be committed together.
+
+
+=== JVM Build Service Config Options [[config_options]]
+
+TODO:
