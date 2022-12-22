@@ -6,7 +6,7 @@
 
     <groupId>io.apheleia</groupId>
     <artifactId>apheleia</artifactId>
-    <version>0.7-SNAPSHOT</version>
+    <version>0.7</version>
     <packaging>pom</packaging>
 
 
