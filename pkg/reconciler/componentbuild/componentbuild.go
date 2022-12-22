@@ -103,25 +103,6 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 
 func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) (reconcile.Result, error) {
 	log.Info("Handling ComponentBuild", "name", cb.Name, "outstanding", cb.Status.Outstanding, "state", cb.Status.State)
-	completed := cb.Status.State == v1alpha1.ComponentBuildStateComplete || cb.Status.State == v1alpha1.ComponentBuildStateFailed
-	if completed {
-		if !cb.Status.ArtifactsDeployed {
-			log.Info("Deploying ComponentBuild Artifacts", "name", cb.Name, "outstanding", cb.Status.Outstanding, "state", cb.Status.State)
-			err := r.deployArtifacts(ctx, log, cb)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-			cb.Status.ArtifactsDeployed = true
-			return reconcile.Result{}, r.client.Status().Update(ctx, cb)
-		} else if !cb.Status.ResultNotified {
-			err := r.notifyResult(ctx, log, cb)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-			cb.Status.ResultNotified = true
-			return reconcile.Result{}, r.client.Status().Update(ctx, cb)
-		}
-	}
 
 	abrMap := map[string]*jvmbs.ArtifactBuild{}
 	abrList := jvmbs.ArtifactBuildList{}
@@ -171,13 +152,51 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 			if err != nil {
 				return reconcile.Result{}, err
 			}
+			cb.Status.ArtifactState[i] = artifactState(&abr)
+			cb.Status.Outstanding++
 		}
 	}
-	if cb.Status.Outstanding > 0 {
+	if cb.Status.Outstanding == 0 {
+		//completed, change the state
+		failed := false
+		for _, v := range cb.Status.ArtifactState {
+			if v.Failed {
+				failed = true
+				break
+			}
+		}
+		if failed {
+			cb.Status.State = v1alpha1.ComponentBuildStateFailed
+		} else {
+			cb.Status.State = v1alpha1.ComponentBuildStateComplete
+		}
+		//this had previously had all its parts built, nothing has changed
+		//so we check if we need to run the deploy tasks
+		if !cb.Status.ArtifactsDeployed {
+			log.Info("Deploying ComponentBuild Artifacts", "name", cb.Name, "outstanding", cb.Status.Outstanding, "state", cb.Status.State)
+			err := r.deployArtifacts(ctx, log, cb)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			cb.Status.ArtifactsDeployed = true
+			return reconcile.Result{}, r.client.Status().Update(ctx, cb)
+		} else if !cb.Status.ResultNotified {
+			err := r.notifyResult(ctx, log, cb)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			cb.Status.ResultNotified = true
+			return reconcile.Result{}, r.client.Status().Update(ctx, cb)
+		}
+	} else {
 		//if there are still some outstanding we reset the notification state
 		cb.Status.ResultNotified = false
+		cb.Status.State = v1alpha1.ComponentBuildStateInProgress
+		cb.Status.ArtifactsDeployed = false
+		cb.Status.ResultNotified = false
 	}
-	return r.checkOutstandingArtifactBuilds(ctx, cb)
+	err = r.client.Status().Update(ctx, cb)
+	return reconcile.Result{}, err
 }
 
 func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) error {
@@ -237,44 +256,14 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 	}
 	artifactState := artifactState(abr)
 	for _, i := range cbList.Items {
-		v, exists := i.Status.ArtifactState[abr.Spec.GAV]
+		_, exists := i.Status.ArtifactState[abr.Spec.GAV]
 		if exists {
-			done := v.Done
 			i.Status.ArtifactState[abr.Spec.GAV] = artifactState
-			if !done && artifactState.Done {
-				i.Status.Outstanding--
-			} else if done && !artifactState.Done {
-				i.Status.Outstanding++
-			}
-			result, err2 := r.checkOutstandingArtifactBuilds(ctx, &i)
-			if err2 != nil {
-				return result, err2
+			err := r.client.Status().Update(ctx, &i)
+			if err != nil {
+				return reconcile.Result{}, err
 			}
 		}
-	}
-	return reconcile.Result{}, nil
-}
-
-func (r *ReconcileArtifactBuild) checkOutstandingArtifactBuilds(ctx context.Context, i *v1alpha1.ComponentBuild) (reconcile.Result, error) {
-	if i.Status.Outstanding == 0 {
-		failed := false
-		for _, v := range i.Status.ArtifactState {
-			if v.Failed {
-				failed = true
-				break
-			}
-		}
-		if failed {
-			i.Status.State = v1alpha1.ComponentBuildStateFailed
-		} else {
-			i.Status.State = v1alpha1.ComponentBuildStateComplete
-		}
-	} else {
-		i.Status.State = v1alpha1.ComponentBuildStateInProgress
-	}
-	err := r.client.Status().Update(ctx, i)
-	if err != nil {
-		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, nil
 }
