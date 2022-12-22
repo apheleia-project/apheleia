@@ -69,6 +69,9 @@ public class AnalyserCommand implements Runnable {
     @CommandLine.Option(names = "--tag")
     String tag;
 
+    @CommandLine.Option(names = "--gradle")
+    boolean gradle;
+
     @Override
     public void run() {
         try {
@@ -244,10 +247,14 @@ public class AnalyserCommand implements Runnable {
         }
         //now figure out the additional GAV's
         for (var i : additional) {
-            boolean gradle = i.getParent().getFileName().toString().length() == 40;
+            boolean inGradleCache = i.getParent().getFileName().toString().length() == 40;
             //gradle repo layout is different to maven
             //we use a different strategy to determine the GAV
             if (gradle) {
+                if (!inGradleCache) {
+                    Log.warnf("Could not determine GAV for %s", i);
+                    continue;
+                }
                 Path version = i.getParent().getParent();
                 Path artifact = version.getParent();
                 Path group = artifact.getParent();
