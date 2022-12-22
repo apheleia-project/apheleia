@@ -3,7 +3,6 @@ apiVersion: jvmbuildservice.io/v1alpha1
 kind: JBSConfig
 metadata:
   name: jvm-build-config
-  namespace: kas-fleetshard
 spec:
   enableRebuilds: true
   owner: mk-ci-cd

@@ -1,0 +1,150 @@
+= Apheleia Documentation
+
+This is a bit of a brain dump of everything I can think of before I go on PTO. Some
+of this will end up in the JVM Build service docs, but I am putting it here so everything
+is in one place for now.
+
+== Installation
+
+=== System Installation
+
+Installation on a cluster can be achieved by using the following command:
+
+```
+./deployment/deploy.sh
+```
+
+This same command can also be used to update the server if the relevant resources have been
+updated in the `deployment` directory. This command will do the following:
+
+Install Openshift Pipelines::
+
+This is managed by `deployment/tekton`. It simply creates a subscription to the  `pipelines-1.8` operator. There should be no need to change this.
+
+Install the JVM Build Service::
+
+This is controlled by `deployment/build-operator`. It references resources from the JVM Build service repo, defined by a specific commit. Every time code is committed to `main` in this repo new images are built automatically. These images are tagged under the git sha, so updating the service is a case of updating from the old git sha to the new commit.
+
+*Example of how to update the JVM Build Service*
+
+An example of the `kustomization.yaml` file is shown below:
+
+```
+resources:
+- https://github.com/redhat-appstudio/jvm-build-service/deploy/crds/base?ref=2501bc0fa9c4e7ee135263bb9dc43d50a65a0e98
+- https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/base?ref=2501bc0fa9c4e7ee135263bb9dc43d50a65a0e98
+- https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/config?ref=2501bc0fa9c4e7ee135263bb9dc43d50a65a0e98
+
+images:
+  - name: hacbs-jvm-operator
+    newName: quay.io/redhat-appstudio/hacbs-jvm-controller
+    newTag: 2501bc0fa9c4e7ee135263bb9dc43d50a65a0e98
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+```
+
+To update to a newer version I need to find the commit that I want to update to in the JVM Build service repo, and then replace all four instances of `2501bc0fa9c4e7ee135263bb9dc43d50a65a0e98` with the new commit, then run `deploy.sh` again.
+
+WARNING: The images reference look a lot like we are referencing an image by its hash, but it is actually a tag that matches a git commit. Every image is built with a tag that matches the commit it was built from.
+
+Deploy the Aphelia CRDS::
+
+This is managed by the `deploy/crds` directory. These CRDs must not be edited directly. If you have made changes to the golang objects that represent the cluster state, you will need to also generate new CRDS, to do this see the section <<generate_crds>>.
+
+
+=== Namespace Setup
+
+Once the system is installed we can do per-namespace setup. There are 3 parts to this:
+
+. Create the Namespace
+. Setup the Secrets
+. Install the JVM Build Service Objects
+
+For these examples we will use a namespace called `kas-fleetshard`.
+
+WARNING: Due to a current limitation in JVM build service you need to create the secret before setting up the namespace. This will be fixed at some point in the future.
+
+==== Create the Namespace
+
+`oc create namespace kas-fleetshard`
+
+==== Create the Secrets
+
+Apheleia needs the following secrets in each namespace in order to function correctly.
+
+aws-secrets::
+
+This secret is used by the deploy task to authenticate against AWS CodeArtifact. It requires an AWS access key and AWS secret key. These should be from a service account and not a personal account.
+
+This account needs the following permissions:
+
+```
+"codeartifact:Describe*",
+"codeartifact:Get*",
+"codeartifact:List*",
+"codeartifact:ReadFromRepository"
+"codeartifact:DeletePackageVersions",
+"codeartifact:DescribePackageVersion",
+"codeartifact:DisposePackageVersions",
+"codeartifact:TagResource",
+"codeartifact:PutPackageOriginConfiguration",
+"codeartifact:UntagResource",
+"codeartifact:DescribeRepository",
+"codeartifact:DescribeDomain",
+"codeartifact:PutPackageMetadata",
+"codeartifact:UpdatePackageVersionsStatus",
+"codeartifact:PublishPackageVersion",
+```
+
+You can create the secret with the following command:
+
+```
+kubectl create secret generic aws-secrets --from-literal=access-key=<AWS_ACCESS_KEY> --from-literal=secret-key=<AWS_SECRET_KEY>
+```
+
+jvm-build-image-secrets::
+
+This secret is used to authenticate against the https://quay.io repository that is used to store the rebuilt artifacts. If you have done a docker login with an account that has
+access you can create the secret as follows:
+
+```
+kubectl create secret generic jvm-build-image-secrets --from-file=.dockerconfigjson=$HOME/.docker/config.json --type=kubernetes.io/dockerconfigjson
+```
+
+WARNING: This will include everything in your `$HOME/.docker/config.json` file, you should make sure you don't have additional repositories mentioned in this file that you don't want saved to the cluster.
+
+jvm-build-git-secrets::
+
+This secret is used to authenticate against private git repositories. You can create
+it as follows:
+
+```
+kubectl create secret generic jvm-build-git-secrets --from-literal .git-credentials="
+https://<GITLAB_USERNAME>:<GITLAB_TOKEN>@gitlab.cee.redhat.com/
+"
+```
+
+==== Install the Config
+
+To activate the namespace run:
+
+```
+./deployment/setup-namespaces.sh kas-fleetshard
+```
+
+WARNING: This config hard codes the quay.io user to `mk-ci-cd`. If you want a different user or repository you will need to update `deployment/namespace/config.yaml`. For full details of all config options see <<config_options>>. If you need to update the config run `setup-namespaces.sh` again after modifying the `config.yaml`.
+
+=== Generating the CRDS [[generate_crds]]
+
+TODO
+
+
+=== JVM Build Service Config Options [[config_options]]
+
+TODO:
+
+
+```
+make generate
+```
