@@ -496,17 +496,81 @@ legacyRepos: <6>
 Once we have added this information re-running the build should see it resolve this information, and it should then move to state `ArtifactBuildBuilding` (and hopefully eventually to `ArtifactBuildComplete`).
 
 
+=== Dealing With Failed Builds [[failed_builds]]
+
+To deal with failed builds we need to look at the build logs, figure out why it failed, and attempt to fix it.
+
+Unfortunately this can be complex.
+
+First we need to identify the correct `DependencyBuild` object, run `kubectl get dependencybuilds` to list them,
+and pick the one you are interested in out of the list. Generally each `DependencyBuild` will have multiple pipeline
+runs, named using the pattern `<dependency-build-name>-build-<n>`. You can view the logs using the `tkn pr logs <name>`
+command, e.g.:
+
+```
+tkn pr logs e8f6f6126f222a021fedfaee3bd3f980-build-0
+```
+
+The builds are performed lowest JDK to highest JDK, although some JDKs may be skipped if the analyser can determine they
+are not relevant. If a build has failed because of a JDK version issue it may just be you need to look at a later build.
+
+==== Unknown Build Systems
+
+If there are no builds at all then this means the analyser could not find a build file to use. The only real way to fix
+this at the moment is to create a fork of the repo, change the build system to Maven, and build from the fork.
+
+An example of this is at https://github.com/jvm-build-service-code/cs-au-dk-dk.brics.automaton.
+The 1.11-8 release had no build file, so the project was forked and one added. This was then added to the SCM information at https://github.com/redhat-appstudio/jvm-build-data/blob/30a00905314ca5bf20d653af1a59c39c93b9aadb/scm-info/dk/brics/_artifact/automaton/scm.yaml#L6.
+
+==== Tweaking Build Parameters
+
+It is also possible to tweak build parameters to get them to pass. This is done by adding a `build.yaml` file to the build
+data repository. For our databind example the file would go in one of the following locations:
+
+```
+build-info/github.com/FasterXML/jackson-databind/_version/2.13.4.2/build.yaml
+build-info/github.com/FasterXML/jackson-databind/build.yaml
+```
+
+An example of a complete (although nonsensical) file is shown below:
+
+```
+enforceVersion: true <1>
+additionalArgs: <2>
+  - "-DskipDocs"
+alternativeArgs: <3>
+  - "'set Global / baseVersionSuffix:=\"\"'"
+  - "enableOptimizer"
+preBuildScript: | <4>
+    ./autogen.sh
+    /bin/sh -c "$(rpm --eval %configure); $(rpm --eval %__make) $(rpm --eval %_smp_mflags)"
+additionalDownloads: <5>
+  - uri: https://github.com/mikefarah/yq/releases/download/v4.30.4/yq_linux_amd64 <6>
+    sha256: 30459aa144a26125a1b22c62760f9b3872123233a5658934f7bd9fe714d7864d <7>
+    type: executable <8>
+    fileName: yq <9>
+    binaryPath: only_for_tar/bin <10>
+```
+<1> If the tag contains build files that do not match the version include this to override the version.
+<2> Additional parameters to add to the build command line.
+<3> A complete replacement for the build command line, this should not be used with 'additionalArgs' as it will replace them. This is mostly used in SBT builds.
+<4> A script to run before the build. This can do things like build native components that are required.
+<5> Additional downloads required for the build.
+<6> The URI to download from
+<7> The expected SHA.
+<8> The type, can be either `executable`, or `tar`.
+<9> The final file name, this will be added to `$PATH`. This is only for `executable` files.
+<10> The path to the directory inside the tar file that contains executables, this will be added to `$PATH`.
+
+
+
 == Placeholder Section Heading
 
 Everything after this is a placeholder
 
-
 == The Build Data Repository [[build_data_repo]]
 
 === Private Build Data Repositories [[private_build_data_repos]]
-
-
-=== Dealing With Failed Builds [[failed_builds]]
 
 
 === Generating the CRDS [[generate_crds]]
