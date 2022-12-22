@@ -4,6 +4,149 @@ This is a bit of a brain dump of everything I can think of before I go on PTO. S
 of this will end up in the JVM Build service docs, but I am putting it here so everything
 is in one place for now.
 
+== Basic Concepts
+
+This section explains all the different parts of the system, its components, and
+how data flows through the system.
+
+=== JVM Build Service
+
+==== Components
+
+JVM Build Service consists of the following components:
+
+JVM Build Service Operator::
+
+This operator is responsible for orchestrating all parts of the build process. It watches user namespaces, and attempts to rebuilt objects when they are requested.
+
+Cache::
+
+The cache is created in every user namespace. It is responsible for caching Maven artifacts to speed up builds, and also transforming artifacts to include tracking data. All dependency rebuilds are configured to only get their artifacts from the cache.
+
+Build Request Processor::
+
+This is a Java + Quarkus CLI tool that provides a host of different functionalities. This is packaged up into an image, and then run in different parts of various pipelines by the operator.
+
+In essence any custom logic that is needed in a pipeline goes in here, and then the operator will invoke it with the correct arguments. This is a single multitool rather than individual functions as experience has shown this is a lot easier to manage.
+
+Builder Images::
+
+The builder images are maintained at the https://github.com/redhat-appstudio/jvm-build-service-builder-images/[builder images repository].
+
+Build Data Repository::
+
+https://github.com/redhat-appstudio/jvm-build-data[This repository] contains information on how to build dependencies, and where their source code is located. For more information see <<build_data_repo>>.
+
+==== CRDS
+
+The JVM Build service provides the following CRDS. All CRDS are located in the https://github.com/redhat-appstudio/jvm-build-service/tree/main/deploy/crds/base[JVM Build Service repo]. They are generated from glang objects that reside https://github.com/redhat-appstudio/jvm-build-service/tree/main/pkg/apis/jvmbuildservice/v1alpha1[here].
+
+===== ArtifactBuild
+
+This represents a request to rebuild an artifact. Creating this object will kick off the JVM Build Service rebuild process. We should have one of these objects for every upstream GAV we want to rebuild.
+
+These have the following states.
+
+ArtifactBuildNew::
+
+Object has just been created.
+
+ArtifactBuildDiscovering::
+
+The JVM Build Service is running a discovery pipeline to determine where the source code for this artifact is located.
+
+ArtifactBuildMissing::
+
+We failed to find the source code location. See <<missing_artifacts>> for information on how to fix this.
+
+ArtifactBuildFailed::
+
+The build failed. See <<failed_builds>> for information on how to fix this.
+
+ArtifactBuildComplete::
+
+The build was a success.
+
+===== DependencyBuild
+
+This represents a repository + tag combination we want to build. These are created automatically by the JVM Build Service Operator after it has looked up how to build.
+
+Once these have been created the operator first runs a 'discovery' pipeline, that attempts to figure out how to build the repo, which both examines the code base, and also pulls in build information from <<build_data_repo>>. The result of
+this is a list of build recipes that the operator will attempt one after the other. This object has the following states:
+
+DependencyBuildStateNew::
+
+The object has just been created.
+
+DependencyBuildStateAnalyzeBuild::
+
+The operator is running a pipeline to attempt to discover how to build the repository.
+
+DependencyBuildStateBuilding::
+
+A build pipeline is running.
+
+DependencyBuildStateComplete::
+
+The build was a success.
+
+DependencyBuildStateFailed::
+
+All attempts to build this repository have failed. For instructions on how to fix this see <<failed_builds>>.
+
+DependencyBuildStateContaminated::
+
+This state means that the build was a success, but community artifacts were shaded into the output of the build. The operator
+will attempt to fix this automatically, by creating new `ArtifactBuild` objects for everything that was shaded into the output.
+Once these have completed the build is automatically retried. A good example of this is the Netty build, which gets contaminated
+by JCTools. If these artifact builds fail then the `DependencyBuild` will stay in this state indefinitely.
+
+===== RebuiltArtifact
+
+This represents a GAV that has been built and deployed to the image repo. It is basically just for internal bookkeeping
+purposes.
+
+===== JBSConfig
+
+This object is used to configure all aspects of the JVM Build Service. For more information on the options it provides see <<config_options>>. The creation of this object is what triggers the creation of the Cache deployment for the namespace,
+and is required for any rebuilds to happen in a given namespace.
+
+===== SystemConfig
+
+This is a singleton object that configures the JVM Build System. The main configuration it provides is the builder images to use. At present Apheleia is using the standard builder images from the https://github.com/redhat-appstudio/jvm-build-service/blob/main/deploy/operator/config/system-config.yaml[JVM Build Service Repo] merged with information from the https://github.com/redhat-appstudio/jvm-build-service-builder-images/blob/main/image-config.yaml[Builder Image Repo], however this can be overridden if required by modifying the `SystemConfig`.
+
+=== Apheleia
+
+==== Components
+
+Apheleia consists of the following components:
+
+Apheleia Operator::
+
+This operator is responsible for orchestrating the additional workflows required by the RHOSAK team. In particular it will:
+
+- Reconcile on `ComponentBuild` objects and turn them into `ArtifactBuild` objects that can be built by the JVM build service.
+- Watch the state of `ArtifactBuild` objects and deploy the results to a Maven repository when everything has been built.
+
+Apheleia Processor::
+
+This is a Java + Quarkus CLI tool that provides a multiple functions. At present it supports the following commands:
+
+*analyse*
+
+This runs in the Jenkins pipeline, analyses the output of a build, and creates a `ComponentBuild` resource on the cluster that kicks off the build process.
+
+*deploy*
+
+This is run by the Operator as a Tekton task, although it can be run manually. This will
+deploy all built artifacts in the namespace to an AWS CodeArtifact repo.
+
+*download-sources*
+
+This will download all the sources from a `ComponentBuild` into a single `.tar.gz` file.
+
+For full details on the parameters it supports see the built-in usage help.
+
 == Installation
 
 === System Installation
@@ -135,6 +278,7 @@ To activate the namespace run:
 
 WARNING: This config hard codes the quay.io user to `mk-ci-cd`. If you want a different user or repository you will need to update `deployment/namespace/config.yaml`. For full details of all config options see <<config_options>>. If you need to update the config run `setup-namespaces.sh` again after modifying the `config.yaml`.
 
+
 === Generating the CRDS [[generate_crds]]
 
 TODO
@@ -148,3 +292,25 @@ TODO:
 ```
 make generate
 ```
+
+=== Dealing With Missing Artifacts [[missing_artifacts]]
+
+To fix this we need to add additional information to the https://github.com/redhat-appstudio/jvm-build-data/tree/main/scm-info[build information repository]. Once this has been updated see the section on <<rebuilding_artifacts>> for instructions on how to re-run it.
+
+=== Dealing With Failed Builds [[failed_builds]]
+
+=== Re-Running Builds [[rebuilding_artifacts]]
+
+To rebuild an artifact you need to annotate the `ArtifactBuild` object with `jvmbuildservice.io/rebuild=true`. For example to rebuild the `zookeeper.3.6.3-8fc126b0` `ArtifactBuild` you would run the following command:
+
+```
+kubectl annotate artifactbuild zookeeper.3.6.3-8fc126b0 jvmbuildservice.io/rebuild=true
+```
+
+You can also use the `jvmbuildservice.io/rebuild=failed` annotation to rebuild only failed artifacts, for example the following command will retry all failed artifacts:
+
+```
+kubectl annotate artifactbuild --all jvmbuildservice.io/rebuild=failed
+```
+
+== The Build Data Repository [[build_data_repo]]
