@@ -288,17 +288,13 @@ To activate the namespace run:
 WARNING: This config hard codes the quay.io user to `mk-ci-cd`. If you want a different user or repository you will need to update `deployment/namespace/config.yaml`. For full details of all config options see <<config_options>>. If you need to update the config run `setup-namespaces.sh` again after modifying the `config.yaml`.
 
 
-```
-make generate
-```
-
 == Users Guide
 
 This section covers everything (hopefully) you need to know to perform builds with Aphelia.
 
 === Flow Overview
 
-image::Apheleia Flow Chart.png
+image::Apheleia Flow Chart.png[]
 
 The basic flow is summarised in the image above. The Apheleia dependency analyser is placed into the Jenkins pipeline after the build step. It Analyses the build and creates a `ComponentBuild` with the results. If this has no community dependencies then it will exit with a zero exit code, otherwise it will be non-zero and fail the pipeline.
 
