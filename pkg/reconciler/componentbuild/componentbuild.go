@@ -8,6 +8,7 @@ import (
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,8 +28,9 @@ import (
 
 const (
 	//TODO eventually we'll need to decide if we want to make this tuneable
-	contextTimeout  = 300 * time.Second
-	DeployTaskLabel = "apheleia.io/deploy-task"
+	contextTimeout      = 300 * time.Second
+	DeployTaskLabel     = "apheleia.io/deploy-task"
+	NotifyPipelineLabel = "apheleia.io/notify-pipeline"
 )
 
 type ReconcileArtifactBuild struct {
@@ -200,8 +202,44 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 }
 
 func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) error {
-	//TODO: KICK OFF JENKINS RUN HERE
-	return nil
+	tr := v1beta1.PipelineRun{}
+	tr.GenerateName = cb.Name + "-notify-pipeline"
+	tr.Namespace = cb.Namespace
+	tr.Labels = map[string]string{NotifyPipelineLabel: cb.Name}
+	var notifierMessage string
+	if cb.Status.State == v1alpha1.ComponentBuildStateFailed {
+		var failedGavs []string
+		for gav, v := range cb.Status.ArtifactState {
+			if v.Failed {
+				failedGavs = append(failedGavs, gav)
+			}
+		}
+		notifierMessage = fmt.Sprintf("The following dependency builds have failed: %s.", strings.Join(failedGavs[:], ","))
+	} else if cb.Status.State == v1alpha1.ComponentBuildStateComplete {
+		notifierMessage = "/retest Success all dependency builds have completed."
+	}
+	tr.Spec.PipelineRef = &v1beta1.PipelineRef{Name: "component-build-notifier"}
+	tr.Spec.Params = []v1beta1.Param{
+		{Name: "url", Value: v1beta1.ArrayOrString{StringVal: cb.Spec.SCMURL, Type: v1beta1.ParamTypeString}},
+		{Name: "secret-key-ref", Value: v1beta1.ArrayOrString{StringVal: "jvm-build-git-secrets", Type: v1beta1.ParamTypeString}},
+		{Name: "message", Value: v1beta1.ArrayOrString{StringVal: notifierMessage, Type: v1beta1.ParamTypeString}},
+	}
+	qty, err := resource.ParseQuantity("1Gi")
+	if err != nil {
+		return err
+	}
+	tr.Spec.Workspaces = []v1beta1.WorkspaceBinding{
+		{Name: "pr", VolumeClaimTemplate: &v1.PersistentVolumeClaim{
+			Spec: v1.PersistentVolumeClaimSpec{
+				AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+				Resources: v1.ResourceRequirements{
+					Requests: map[v1.ResourceName]resource.Quantity{"storage": qty},
+				},
+			},
+		}},
+	}
+	log.Info("Notifying ComponentBuild Status Update via PR Comment", "name", cb.Name, "scmUrl", cb.Spec.SCMURL, "state", cb.Status.State)
+	return r.client.Create(ctx, &tr)
 }
 
 // Attempts to deploy all the artifacts from the namespace
