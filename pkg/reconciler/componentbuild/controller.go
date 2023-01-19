@@ -17,6 +17,8 @@ import (
 func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 	r := newReconciler(mgr)
 	return ctrl.NewControllerManagedBy(mgr).For(&v1alpha1.ComponentBuild{}).
+		Owns(&v1beta1.TaskRun{}).
+		Owns(&v1beta1.PipelineRun{}).
 		Watches(&source.Kind{Type: &jvmbs.ArtifactBuild{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
 			artifactBuild := o.(*jvmbs.ArtifactBuild)
 			return []reconcile.Request{
@@ -28,18 +30,6 @@ func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 					ClusterName: logicalcluster.From(artifactBuild).String(),
 				},
 			}
-		})).Watches(&source.Kind{Type: &jvmbs.ArtifactBuild{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
-		artifactBuild := o.(*jvmbs.ArtifactBuild)
-		return []reconcile.Request{
-			{
-				NamespacedName: types.NamespacedName{
-					Name:      artifactBuild.Name,
-					Namespace: artifactBuild.Namespace,
-				},
-				ClusterName: logicalcluster.From(artifactBuild).String(),
-			},
-		}
-	})).Watches(&source.Kind{Type: &v1beta1.TaskRun{}}, &handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.ComponentBuild{}, IsController: false}).
-		Watches(&source.Kind{Type: &v1beta1.PipelineRun{}}, &handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.ComponentBuild{}, IsController: false}).
+		})).
 		Complete(r)
 }

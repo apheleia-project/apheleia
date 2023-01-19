@@ -80,7 +80,7 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 	trerr := r.client.Get(ctx, request.NamespacedName, &tr)
 	if trerr != nil {
 		if !errors.IsNotFound(trerr) {
-			log.Error(trerr, "Reconcile key %s as componentbuild unexpected error", request.NamespacedName.String())
+			log.Error(trerr, "Reconcile key %s as taskrun unexpected error", request.NamespacedName.String())
 			return ctrl.Result{}, trerr
 		}
 	}
@@ -88,12 +88,12 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 	prerr := r.client.Get(ctx, request.NamespacedName, &pr)
 	if prerr != nil {
 		if !errors.IsNotFound(prerr) {
-			log.Error(prerr, "Reconcile key %s as componentbuild unexpected error", request.NamespacedName.String())
-			return ctrl.Result{}, trerr
+			log.Error(prerr, "Reconcile key %s as pipelinerun unexpected error", request.NamespacedName.String())
+			return ctrl.Result{}, prerr
 		}
 	}
 	if cberr != nil && abrerr != nil && trerr != nil && prerr != nil {
-		msg := "Reconcile key received not found errors for componentbuilds, artifactbuilds (probably deleted): " + request.NamespacedName.String()
+		msg := "Reconcile key received not found errors for componentbuilds, artifactbuilds, pipelineruns, taskruns (probably deleted): " + request.NamespacedName.String()
 		log.Info(msg)
 		return ctrl.Result{}, nil
 	}
@@ -215,7 +215,7 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 		return err
 	}
 	for _, i := range existing.Items {
-		if i.Status.GetCondition(apis.ConditionReady).IsTrue() {
+		if i.Status.GetCondition(apis.ConditionSucceeded).IsUnknown() {
 			return nil
 		}
 	}
@@ -356,6 +356,7 @@ func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log 
 }
 
 func (r *ReconcileArtifactBuild) handlePipelineRunReceived(ctx context.Context, log logr.Logger, pr *v1beta1.PipelineRun) (reconcile.Result, error) {
+	log.Info("Received pipelinerun event", pr.Status)
 	if pr.Status.CompletionTime == nil {
 		return reconcile.Result{}, nil
 	}
