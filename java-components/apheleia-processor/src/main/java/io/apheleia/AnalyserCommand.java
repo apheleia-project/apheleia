@@ -66,6 +66,9 @@ public class AnalyserCommand implements Runnable {
     @CommandLine.Option(names = "--git-url")
     String gitUrl;
 
+    @CommandLine.Option(names = "--pr-url")
+    String prUrl;
+
     @CommandLine.Option(names = "--tag")
     String tag;
 
@@ -122,6 +125,9 @@ public class AnalyserCommand implements Runnable {
                     cm.getMetadata().setName(name);
                     cm.getSpec().setScmURL(gitUrl);
                     cm.getSpec().setTag(tag);
+                    if (prUrl != null && prUrl.length() > 0) {
+                        cm.getSpec().setPrURL(prUrl);
+                    }
                     cm.getSpec().setArtifacts(new ArrayList<>(allGavs));
                     c.resource(cm).createOrReplace();
                 }

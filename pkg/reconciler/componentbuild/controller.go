@@ -40,5 +40,6 @@ func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 			},
 		}
 	})).Watches(&source.Kind{Type: &v1beta1.TaskRun{}}, &handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.ComponentBuild{}, IsController: false}).
+		Watches(&source.Kind{Type: &v1beta1.PipelineRun{}}, &handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.ComponentBuild{}, IsController: false}).
 		Complete(r)
 }

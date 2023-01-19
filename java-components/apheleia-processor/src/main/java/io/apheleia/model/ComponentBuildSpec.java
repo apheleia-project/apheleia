@@ -7,6 +7,15 @@ public class ComponentBuildSpec {
     private List<String> artifacts = new ArrayList<>();
     private String scmURL;
     private String tag;
+    private String prURL;
+
+    public String getPrURL() {
+        return prURL;
+    }
+
+    public void setPrURL(String prURL) {
+        this.prURL = prURL;
+    }
 
     public List<String> getArtifacts() {
         return artifacts;
