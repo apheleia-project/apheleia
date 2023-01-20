@@ -17,8 +17,6 @@ import (
 func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 	r := newReconciler(mgr)
 	return ctrl.NewControllerManagedBy(mgr).For(&v1alpha1.ComponentBuild{}).
-		Owns(&v1beta1.TaskRun{}).
-		Owns(&v1beta1.PipelineRun{}).
 		Watches(&source.Kind{Type: &jvmbs.ArtifactBuild{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
 			artifactBuild := o.(*jvmbs.ArtifactBuild)
 			return []reconcile.Request{
@@ -28,6 +26,30 @@ func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 						Namespace: artifactBuild.Namespace,
 					},
 					ClusterName: logicalcluster.From(artifactBuild).String(),
+				},
+			}
+		})).
+		Watches(&source.Kind{Type: &v1beta1.PipelineRun{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+			pipelineRun := o.(*v1beta1.PipelineRun)
+			return []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      pipelineRun.Name,
+						Namespace: pipelineRun.Namespace,
+					},
+					ClusterName: logicalcluster.From(pipelineRun).String(),
+				},
+			}
+		})).
+		Watches(&source.Kind{Type: &v1beta1.TaskRun{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+			taskRun := o.(*v1beta1.TaskRun)
+			return []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      taskRun.Name,
+						Namespace: taskRun.Namespace,
+					},
+					ClusterName: logicalcluster.From(taskRun).String(),
 				},
 			}
 		})).

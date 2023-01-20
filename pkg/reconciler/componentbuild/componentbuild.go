@@ -101,7 +101,6 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 	switch {
 	case cberr == nil:
 		return r.handleComponentBuildReceived(ctx, log, &cb)
-
 	case abrerr == nil:
 		return r.handleArtifactBuildReceived(ctx, log, &abr)
 	case trerr == nil:
@@ -116,52 +115,29 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) (reconcile.Result, error) {
 	log.Info("Handling ComponentBuild", "name", cb.Name, "outstanding", cb.Status.Outstanding, "state", cb.Status.State)
 
-	abrMap := map[string]*jvmbs.ArtifactBuild{}
-	abrList := jvmbs.ArtifactBuildList{}
-	err := r.client.List(ctx, &abrList, client.InNamespace(cb.Namespace))
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	for i := range abrList.Items {
-		item := abrList.Items[i]
-		abrMap[item.Spec.GAV] = &item
-	}
-
 	//iterate over the spec, and calculate the corresponding status
 	cb.Status.Outstanding = 0
-	oldState := cb.Status.ArtifactState
 	cb.Status.ArtifactState = map[string]v1alpha1.ArtifactState{}
 	//TODO: Handle contaminates
 	for _, i := range cb.Spec.Artifacts {
-		existing := abrMap[i]
-		if existing != nil {
-			cb.Status.ArtifactState[i] = r.artifactState(ctx, log, existing)
-			_, existingRef := oldState[i]
-			if !existingRef {
-				//add an owner ref if not already present
-				err := controllerutil.SetOwnerReference(cb, existing, r.scheme)
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-				err = r.client.Update(ctx, existing)
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-			}
+		existing := jvmbs.ArtifactBuild{}
+		key := types.NamespacedName{Namespace: cb.Namespace, Name: artifactbuild.CreateABRName(i)}
+		aberr := r.client.Get(ctx, key, &existing)
+		if aberr == nil || !errors.IsNotFound(aberr) {
+			cb.Status.ArtifactState[i] = r.artifactState(ctx, log, &existing)
 			state := cb.Status.ArtifactState[i]
 			if !state.Done() {
 				cb.Status.Outstanding++
+			}
+			if state.Built && !state.Deployed {
+				r.deployArtifact(ctx, log, cb, &existing)
 			}
 		} else {
 			abr := jvmbs.ArtifactBuild{}
 			abr.Spec = jvmbs.ArtifactBuildSpec{GAV: i}
 			abr.Name = artifactbuild.CreateABRName(i)
 			abr.Namespace = cb.Namespace
-			err := controllerutil.SetOwnerReference(cb, &abr, r.scheme)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-			err = r.client.Create(ctx, &abr)
+			err := r.client.Create(ctx, &abr)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
@@ -195,7 +171,7 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 		cb.Status.State = v1alpha1.ComponentBuildStateInProgress
 		cb.Status.ResultNotified = false
 	}
-	err = r.client.Update(ctx, cb)
+	err := r.client.Status().Update(ctx, cb)
 	return reconcile.Result{}, err
 }
 
@@ -222,7 +198,7 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 	tr := &v1beta1.PipelineRun{}
 	tr.GenerateName = cb.Name + "-notify-pipeline"
 	tr.Namespace = cb.Namespace
-	controllerutil.SetOwnerReference(cb, tr, r.scheme)
+	controllerutil.SetControllerReference(cb, tr, r.scheme)
 	tr.Labels = map[string]string{NotifyPipelineLabel: cb.Name}
 	var notifierMessage string
 	if cb.Status.State == v1alpha1.ComponentBuildStateFailed {
@@ -275,13 +251,14 @@ func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Lo
 		return err
 	}
 	for _, i := range existing.Items {
-		if i.Status.GetCondition(apis.ConditionReady).IsTrue() {
+		if i.Status.GetCondition(apis.ConditionSucceeded).IsUnknown() {
 			return nil
 		}
 	}
 	tr := &v1beta1.TaskRun{}
 	tr.GenerateName = abr.Name + "-deploy-task"
 	tr.Namespace = abr.Namespace
+	// TODO: This reference should be at the ArtifactBuild level and not the ComponentBuild level
 	controllerutil.SetOwnerReference(cb, tr, r.scheme)
 	tr.Labels = map[string]string{DeployTaskLabel: abr.Name}
 	tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
@@ -296,20 +273,16 @@ func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Lo
 
 }
 func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) (reconcile.Result, error) {
+	log.Info("Handling ArtifactBuild", "name", abr.Name, "state", abr.Status.State)
 	cbList := v1alpha1.ComponentBuildList{}
 	err := r.client.List(ctx, &cbList, client.InNamespace(abr.Namespace))
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	artifactState := r.artifactState(ctx, log, abr)
 	for _, i := range cbList.Items {
 		_, exists := i.Status.ArtifactState[abr.Spec.GAV]
 		if exists {
-			if artifactState.Built && !artifactState.Deployed {
-				r.deployArtifact(ctx, log, &i, abr)
-			}
-			i.Status.ArtifactState[abr.Spec.GAV] = artifactState
-			err := r.client.Update(ctx, &i)
+			r.handleComponentBuildReceived(ctx, log, &i)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
@@ -319,7 +292,8 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 }
 
 func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log logr.Logger, tr *v1beta1.TaskRun) (reconcile.Result, error) {
-	if tr.Status.CompletionTime == nil {
+	log.Info("Handling TaskRun", "name", tr.Name)
+	if tr.Status.CompletionTime == nil || tr.Labels["tekton.dev/clusterTask"] != "apheleia-deploy" {
 		return reconcile.Result{}, nil
 	}
 	ownerRefs := tr.GetOwnerReferences()
@@ -356,7 +330,10 @@ func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log 
 }
 
 func (r *ReconcileArtifactBuild) handlePipelineRunReceived(ctx context.Context, log logr.Logger, pr *v1beta1.PipelineRun) (reconcile.Result, error) {
-	log.Info("Received pipelinerun event", pr.Status)
+	log.Info("Handling PipelineRun", "name", pr.Name)
+	if pr.Labels["tekton.dev/pipeline"] != "component-build-notifier" {
+		return reconcile.Result{}, nil
+	}
 	if pr.Status.CompletionTime == nil {
 		return reconcile.Result{}, nil
 	}
@@ -390,10 +367,10 @@ func (r *ReconcileArtifactBuild) handlePipelineRunReceived(ctx context.Context, 
 		log.Error(err, fmt.Sprintf(msg, pr.Namespace, pr.Name, pr.Namespace, ownerName, err.Error()))
 		return reconcile.Result{}, err
 	}
-	if pr.Labels["tekton.dev/pipeline"] == "component-build-notifier" && pr.Status.GetCondition(apis.ConditionSucceeded).IsTrue() {
+	if pr.Status.GetCondition(apis.ConditionSucceeded).IsTrue() {
 		cb.Status.ResultNotified = true
 		log.Info("Setting resultNotified: True for ComponentBuild Status", "name", cb.Name)
-		return reconcile.Result{}, r.client.Update(ctx, &cb)
+		return reconcile.Result{}, r.client.Status().Update(ctx, &cb)
 	}
 	return r.handleComponentBuildReceived(ctx, log, &cb)
 }
