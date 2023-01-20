@@ -130,7 +130,7 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 				cb.Status.Outstanding++
 			}
 			if state.Built && !state.Deployed {
-				r.deployArtifact(ctx, log, cb, &existing)
+				r.deployArtifact(ctx, &existing)
 			}
 		} else {
 			abr := jvmbs.ArtifactBuild{}
@@ -239,7 +239,7 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 // Attempts to deploy all the artifacts from the namespace
 // Note that this is a generic 'deploy all' task that it is running
 // so other artifacts might be deployed as well
-func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild, abr *jvmbs.ArtifactBuild) error {
+func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, abr *jvmbs.ArtifactBuild) error {
 	//first look for an existing TaskRun - If none are found create a new one
 	existing := v1beta1.TaskRunList{}
 	listOpts := &client.ListOptions{
@@ -258,8 +258,7 @@ func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Lo
 	tr := &v1beta1.TaskRun{}
 	tr.GenerateName = abr.Name + "-deploy-task"
 	tr.Namespace = abr.Namespace
-	// TODO: This reference should be at the ArtifactBuild level and not the ComponentBuild level
-	controllerutil.SetOwnerReference(cb, tr, r.scheme)
+	controllerutil.SetOwnerReference(abr, tr, r.scheme)
 	tr.Labels = map[string]string{DeployTaskLabel: abr.Name}
 	tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
 	tr.Spec.Params = []v1beta1.Param{
@@ -305,28 +304,28 @@ func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log 
 	}
 	ownerName := ""
 	for _, ownerRef := range ownerRefs {
-		if strings.EqualFold(ownerRef.Kind, "componentbuild") || strings.EqualFold(ownerRef.Kind, "componentbuilds") {
+		if strings.EqualFold(ownerRef.Kind, "artifactbuild") || strings.EqualFold(ownerRef.Kind, "artifactbuilds") {
 			ownerName = ownerRef.Name
 			break
 		}
 	}
 	if len(ownerName) == 0 {
-		msg := "taskrun missing componentbuild ownerrefs %s:%s"
+		msg := "taskrun missing artifactbuild ownerrefs %s:%s"
 		r.eventRecorder.Eventf(tr, v1.EventTypeWarning, "MissingOwner", msg, tr.Namespace, tr.Name)
 		log.Info(msg, tr.Namespace, tr.Name)
 		return reconcile.Result{}, nil
 	}
 
 	key := types.NamespacedName{Namespace: tr.Namespace, Name: ownerName}
-	cb := v1alpha1.ComponentBuild{}
-	err := r.client.Get(ctx, key, &cb)
+	ab := jvmbs.ArtifactBuild{}
+	err := r.client.Get(ctx, key, &ab)
 	if err != nil {
-		msg := "get for taskrun %s:%s owning component build %s:%s yielded error %s"
+		msg := "get for taskrun %s:%s owning artifact build %s:%s yielded error %s"
 		r.eventRecorder.Eventf(tr, v1.EventTypeWarning, msg, tr.Namespace, tr.Name, tr.Namespace, ownerName, err.Error())
 		log.Error(err, fmt.Sprintf(msg, tr.Namespace, tr.Name, tr.Namespace, ownerName, err.Error()))
 		return reconcile.Result{}, err
 	}
-	return r.handleComponentBuildReceived(ctx, log, &cb)
+	return r.handleArtifactBuildReceived(ctx, log, &ab)
 }
 
 func (r *ReconcileArtifactBuild) handlePipelineRunReceived(ctx context.Context, log logr.Logger, pr *v1beta1.PipelineRun) (reconcile.Result, error) {
