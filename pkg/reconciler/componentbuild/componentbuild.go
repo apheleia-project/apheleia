@@ -259,7 +259,8 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 		_, exists := i.Status.ArtifactState[abr.Spec.GAV]
 		if exists {
 			i.Status.ArtifactState[abr.Spec.GAV] = artifactState
-			err := r.client.Status().Update(ctx, &i)
+			componentBuild := i
+			err := r.client.Status().Update(ctx, &componentBuild)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
