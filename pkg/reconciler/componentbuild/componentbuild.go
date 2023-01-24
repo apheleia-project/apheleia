@@ -282,9 +282,6 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 		_, exists := i.Status.ArtifactState[abr.Spec.GAV]
 		if exists {
 			r.handleComponentBuildReceived(ctx, log, &i)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
 		}
 	}
 	return reconcile.Result{}, nil
