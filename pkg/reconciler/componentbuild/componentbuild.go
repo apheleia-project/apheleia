@@ -130,7 +130,10 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 				cb.Status.Outstanding++
 			}
 			if state.Built && !state.Deployed {
-				r.deployArtifact(ctx, &existing)
+				derr := r.deployArtifact(ctx, log, &existing)
+				if derr != nil {
+					log.Error(derr, "Error deploying artifact", "name", existing.Name)
+				}
 			}
 		} else {
 			abr := jvmbs.ArtifactBuild{}
@@ -198,7 +201,10 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 	tr := &v1beta1.PipelineRun{}
 	tr.GenerateName = cb.Name + "-notify-pipeline"
 	tr.Namespace = cb.Namespace
-	controllerutil.SetControllerReference(cb, tr, r.scheme)
+	cerr := controllerutil.SetControllerReference(cb, tr, r.scheme)
+	if cerr != nil {
+		log.Error(cerr, fmt.Sprintf("Error setting controller reference for pipelinerun %s", tr.Name))
+	}
 	tr.Labels = map[string]string{NotifyPipelineLabel: cb.Name}
 	var notifierMessage string
 	if cb.Status.State == v1alpha1.ComponentBuildStateFailed {
@@ -239,7 +245,7 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 // Attempts to deploy all the artifacts from the namespace
 // Note that this is a generic 'deploy all' task that it is running
 // so other artifacts might be deployed as well
-func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, abr *jvmbs.ArtifactBuild) error {
+func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) error {
 	//first look for an existing TaskRun - If none are found create a new one
 	existing := v1beta1.TaskRunList{}
 	listOpts := &client.ListOptions{
@@ -258,7 +264,10 @@ func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, abr *jvmbs.
 	tr := &v1beta1.TaskRun{}
 	tr.GenerateName = abr.Name + "-deploy-task"
 	tr.Namespace = abr.Namespace
-	controllerutil.SetOwnerReference(abr, tr, r.scheme)
+	orerr := controllerutil.SetOwnerReference(abr, tr, r.scheme)
+	if orerr != nil {
+		log.Error(orerr, fmt.Sprintf("Error handling taskrun %s", tr.Name))
+	}
 	tr.Labels = map[string]string{DeployTaskLabel: abr.Name}
 	tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
 	tr.Spec.Params = []v1beta1.Param{
@@ -281,7 +290,10 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 	for _, i := range cbList.Items {
 		_, exists := i.Status.ArtifactState[abr.Spec.GAV]
 		if exists {
-			r.handleComponentBuildReceived(ctx, log, &i)
+			_, cberr := r.handleComponentBuildReceived(ctx, log, &i)
+			if cberr != nil {
+				log.Error(cberr, fmt.Sprintf("Error handling componentbuild %s", i.Name))
+			}
 		}
 	}
 	return reconcile.Result{}, nil
