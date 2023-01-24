@@ -79,8 +79,6 @@ spec:
                       type: boolean
                   type: object
                 type: object
-              artifactsDeployed:
-                type: boolean
               message:
                 type: string
               outstanding:
