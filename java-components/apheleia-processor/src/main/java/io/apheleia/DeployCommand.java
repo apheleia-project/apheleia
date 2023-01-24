@@ -47,10 +47,7 @@ import com.redhat.hacbs.classfile.tracker.TrackingData;
 
 import io.apheleia.jvmbuildservice.model.JBSConfig;
 import io.apheleia.jvmbuildservice.model.RebuiltArtifact;
-import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.dsl.MixedOperation;
-import io.fabric8.kubernetes.client.dsl.Resource;
 import io.quarkus.logging.Log;
 import picocli.CommandLine;
 
@@ -71,6 +68,9 @@ public class DeployCommand implements Runnable {
 
     @CommandLine.Option(names = "--repo", defaultValue = "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/")
     String repo;
+
+    @CommandLine.Option(names = "--artifact", defaultValue = "all")
+    String artifact;
 
     @CommandLine.Option(names = "--force", defaultValue = "false")
     String force;
@@ -99,11 +99,22 @@ public class DeployCommand implements Runnable {
                             .setAuthentication(new AuthenticationBuilder().addUsername("aws")
                                     .addPassword(token).build())
                             .build();
+            List<RebuiltArtifact> rebuildArtifacts;
+            if (this.artifact.equals("all")) {
+                rebuildArtifacts = client
+                        .resources(RebuiltArtifact.class).list().getItems();
+            } else {
+                rebuildArtifacts = new ArrayList<>();
+                RebuiltArtifact rebuildArtifact = client
+                        .resources(RebuiltArtifact.class).withName(this.artifact).get();
+                if (rebuildArtifact != null) {
+                    rebuildArtifacts.add(rebuildArtifact);
+                }
 
-            MixedOperation<RebuiltArtifact, KubernetesResourceList<RebuiltArtifact>, Resource<RebuiltArtifact>> rebuildArtifacts = client
-                    .resources(RebuiltArtifact.class);
+            }
+
             Map<String, List<RebuiltArtifact>> rebuiltArtifactMap = new HashMap<>();
-            for (var i : rebuildArtifacts.list().getItems()) {
+            for (var i : rebuildArtifacts) {
                 if (i.getSpec().getImage() != null) {
                     rebuiltArtifactMap.computeIfAbsent(i.getSpec().getImage(), s -> new ArrayList<>()).add(i);
                 }
@@ -215,17 +226,18 @@ public class DeployCommand implements Runnable {
                         }
 
                         for (var i : e.getValue()) {
-                            rebuildArtifacts.withName(i.getMetadata().getName()).edit(new UnaryOperator<RebuiltArtifact>() {
-                                @Override
-                                public RebuiltArtifact apply(RebuiltArtifact rebuiltArtifact) {
-                                    if (rebuiltArtifact.getMetadata().getAnnotations() == null) {
-                                        rebuiltArtifact.getMetadata().setAnnotations(new HashMap<>());
-                                    }
-                                    rebuiltArtifact.getMetadata().getAnnotations().put(APHELIA_DEPLOYED,
-                                            Integer.toString(CURRENT_VERSION));
-                                    return rebuiltArtifact;
-                                }
-                            });
+                            client.resources(RebuiltArtifact.class).withName(i.getMetadata().getName())
+                                    .edit(new UnaryOperator<RebuiltArtifact>() {
+                                        @Override
+                                        public RebuiltArtifact apply(RebuiltArtifact rebuiltArtifact) {
+                                            if (rebuiltArtifact.getMetadata().getAnnotations() == null) {
+                                                rebuiltArtifact.getMetadata().setAnnotations(new HashMap<>());
+                                            }
+                                            rebuiltArtifact.getMetadata().getAnnotations().put(APHELIA_DEPLOYED,
+                                                    Integer.toString(CURRENT_VERSION));
+                                            return rebuiltArtifact;
+                                        }
+                                    });
                         }
                     } else {
                         System.err.println("Failed to download " + e.getKey());

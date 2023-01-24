@@ -10,8 +10,10 @@ rules:
     resources:
       - artifactbuilds
       - artifactbuilds/status
+      - artifactbuilds/finalizers
       - rebuiltartifacts
       - rebuiltartifacts/status
+      - rebuiltartifacts/finalizers
     verbs:
       - create
       - delete
@@ -26,6 +28,7 @@ rules:
     resources:
       - componentbuilds
       - componentbuilds/status
+      - componentbuilds/finalizers
     verbs:
       - create
       - delete
@@ -66,8 +69,10 @@ rules:
     resources:
       - pipelineruns
       - pipelineruns/status
+      - pipelineruns/finalizers
       - taskruns
       - taskruns/status
+      - taskruns/finalizers
     verbs:
       - create
       - delete

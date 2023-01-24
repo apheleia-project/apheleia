@@ -66,6 +66,9 @@ public class AnalyserCommand implements Runnable {
     @CommandLine.Option(names = "--git-url")
     String gitUrl;
 
+    @CommandLine.Option(names = "--pr-url")
+    String prUrl;
+
     @CommandLine.Option(names = "--tag")
     String tag;
 
@@ -76,7 +79,13 @@ public class AnalyserCommand implements Runnable {
     public void run() {
         try {
             Set<TrackingData> trackingData = new HashSet<>();
-            Set<String> communityGavs = doAnalysis(trackingData);
+            List<Pattern> allowedList = new ArrayList<>();
+            if (this.allowedArtifacts != null) {
+                for (var i : allowedArtifacts) {
+                    allowedList.add(Pattern.compile(i));
+                }
+            }
+            Set<String> communityGavs = doAnalysis(trackingData, allowedList);
             if (createArtifacts) {
                 if (gitUrl == null || tag == null) {
                     throw new RuntimeException("Cannot create Kubernetes artifacts if --tag and --git-url are not specified");
@@ -97,11 +106,28 @@ public class AnalyserCommand implements Runnable {
                     });
                 } else {
                     Set<String> allGavs = new TreeSet<>(communityGavs);
-                    trackingData.forEach((d) -> allGavs.add(d.gav));
+                    trackingData.forEach((d) -> {
+                        boolean shouldExclude = false;
+                        for (var i : allowedList) {
+                            if (i.matcher(d.gav).matches()) {
+                                Log.infof(
+                                        "Community dependency %s was allowed by specified pattern %s, ignoring from ComponentBuild",
+                                        d.gav, i.pattern());
+                                shouldExclude = true;
+                                break;
+                            }
+                        }
+                        if (!shouldExclude) {
+                            allGavs.add(d.gav);
+                        }
+                    });
                     ComponentBuild cm = new ComponentBuild();
                     cm.getMetadata().setName(name);
                     cm.getSpec().setScmURL(gitUrl);
                     cm.getSpec().setTag(tag);
+                    if (prUrl != null && prUrl.length() > 0) {
+                        cm.getSpec().setPrURL(prUrl);
+                    }
                     cm.getSpec().setArtifacts(new ArrayList<>(allGavs));
                     c.resource(cm).createOrReplace();
                 }
@@ -118,14 +144,9 @@ public class AnalyserCommand implements Runnable {
         }
     }
 
-    Set<String> doAnalysis(Set<TrackingData> trackingData) throws IOException {
+    Set<String> doAnalysis(Set<TrackingData> trackingData, List<Pattern> allowedList) throws IOException {
         Set<String> communityGavs = new HashSet<>();
-        List<Pattern> allowedList = new ArrayList<>();
-        if (this.allowedArtifacts != null) {
-            for (var i : allowedArtifacts) {
-                allowedList.add(Pattern.compile(i));
-            }
-        }
+
         //scan the local maven repo first
 
         //map of class name -> path -> hash

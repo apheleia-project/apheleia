@@ -1,6 +1,7 @@
 resources:
   - config.yaml
   - quota.yaml
+  - notifier-pipeline.yaml
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

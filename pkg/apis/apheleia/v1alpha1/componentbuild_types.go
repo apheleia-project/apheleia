@@ -12,17 +12,17 @@ const (
 
 type ComponentBuildSpec struct {
 	SCMURL    string   `json:"scmURL,omitempty"`
+	PRURL     string   `json:"prURL,omitempty"`
 	Tag       string   `json:"tag,omitempty"`
 	Artifacts []string `json:"artifacts,omitempty"`
 }
 
 type ComponentBuildStatus struct {
-	State             string                   `json:"state,omitempty"`
-	Outstanding       int                      `json:"outstanding,omitempty"`
-	ArtifactState     map[string]ArtifactState `json:"artifactState,omitempty"`
-	Message           string                   `json:"message,omitempty"`
-	ArtifactsDeployed bool                     `json:"artifactsDeployed,omitempty"`
-	ResultNotified    bool                     `json:"resultNotified,omitempty"`
+	State          string                   `json:"state,omitempty"`
+	Outstanding    int                      `json:"outstanding,omitempty"`
+	ArtifactState  map[string]ArtifactState `json:"artifactState,omitempty"`
+	Message        string                   `json:"message,omitempty"`
+	ResultNotified bool                     `json:"resultNotified,omitempty"`
 }
 
 //type ArtifactBuildState string
@@ -57,6 +57,14 @@ type ComponentBuildList struct {
 
 type ArtifactState struct {
 	ArtifactBuild string `json:"artifactBuild,omitempty"`
-	Done          bool   `json:"done,omitempty"`
+	Built         bool   `json:"built,omitempty"`
+	Deployed      bool   `json:"deployed,omitempty"`
 	Failed        bool   `json:"failed,omitempty"`
+}
+
+func (as *ArtifactState) Done() bool {
+	if as.Built && as.Deployed {
+		return true
+	}
+	return false
 }

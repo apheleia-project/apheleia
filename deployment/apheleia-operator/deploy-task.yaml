@@ -13,6 +13,9 @@ spec:
       type: string
     - name: REPO
       type: string
+    - name: ARTIFACT
+      type: string
+      default: "all"
     - name: FORCE
       type: string
       default: false
@@ -30,6 +33,8 @@ spec:
         - $(params.REPO)
         - "--force"
         - $(params.FORCE)
+        - "--artifact"
+        - $(params.ARTIFACT)
       env:
         - name: QUAY_TOKEN
           valueFrom:

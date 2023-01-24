@@ -28,17 +28,30 @@ func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 					ClusterName: logicalcluster.From(artifactBuild).String(),
 				},
 			}
-		})).Watches(&source.Kind{Type: &jvmbs.ArtifactBuild{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
-		artifactBuild := o.(*jvmbs.ArtifactBuild)
-		return []reconcile.Request{
-			{
-				NamespacedName: types.NamespacedName{
-					Name:      artifactBuild.Name,
-					Namespace: artifactBuild.Namespace,
+		})).
+		Watches(&source.Kind{Type: &v1beta1.PipelineRun{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+			pipelineRun := o.(*v1beta1.PipelineRun)
+			return []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      pipelineRun.Name,
+						Namespace: pipelineRun.Namespace,
+					},
+					ClusterName: logicalcluster.From(pipelineRun).String(),
 				},
-				ClusterName: logicalcluster.From(artifactBuild).String(),
-			},
-		}
-	})).Watches(&source.Kind{Type: &v1beta1.TaskRun{}}, &handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.ComponentBuild{}, IsController: false}).
+			}
+		})).
+		Watches(&source.Kind{Type: &v1beta1.TaskRun{}}, handler.EnqueueRequestsFromMapFunc(func(o client.Object) []reconcile.Request {
+			taskRun := o.(*v1beta1.TaskRun)
+			return []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Name:      taskRun.Name,
+						Namespace: taskRun.Namespace,
+					},
+					ClusterName: logicalcluster.From(taskRun).String(),
+				},
+			}
+		})).
 		Complete(r)
 }

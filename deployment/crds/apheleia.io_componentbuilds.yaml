@@ -57,6 +57,8 @@ spec:
                 items:
                   type: string
                 type: array
+              prURL:
+                type: string
               scmURL:
                 type: string
               tag:
@@ -69,14 +71,14 @@ spec:
                   properties:
                     artifactBuild:
                       type: string
-                    done:
+                    built:
+                      type: boolean
+                    deployed:
                       type: boolean
                     failed:
                       type: boolean
                   type: object
                 type: object
-              artifactsDeployed:
-                type: boolean
               message:
                 type: string
               outstanding:

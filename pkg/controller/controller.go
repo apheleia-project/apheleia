@@ -74,9 +74,10 @@ func NewManager(cfg *rest.Config, options ctrl.Options) (ctrl.Manager, error) {
 	deployTask.Add(*requirement)
 	options.NewCache = cache.BuilderWithOptions(cache.Options{
 		SelectorsByObject: cache.SelectorsByObject{
-			&v1alpha1.ComponentBuild{}: {},
-			&jvmbs.ArtifactBuild{}:     {},
-			&pipelinev1beta1.TaskRun{}: {Label: deployTask},
+			&v1alpha1.ComponentBuild{}:     {},
+			&jvmbs.ArtifactBuild{}:         {},
+			&pipelinev1beta1.PipelineRun{}: {},
+			&pipelinev1beta1.TaskRun{}:     {Label: deployTask},
 		}})
 
 	mgr, err = ctrl.NewManager(cfg, options)

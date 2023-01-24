@@ -1,0 +1,70 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: component-build-notifier
+spec:
+  params:
+    - name: url
+      type: string
+    - name: secret-key-ref
+      type: string
+    - name: message
+      type: string
+  workspaces:
+    - name: pr
+  tasks:
+    - name: pull-request-fetch
+      taskRef:
+        name: pull-request
+        kind: ClusterTask
+      workspaces:
+        - name: pr
+          workspace: pr
+      params:
+        - name: mode
+          value: download
+        - name: url
+          value: $(params.url)
+        - name: provider
+          value: gitlab
+        - name: secret-key-ref
+          value: $(params.secret-key-ref)
+    - name: add-comment
+      runAfter: [pull-request-fetch]
+      workspaces:
+        - name: pr
+          workspace: pr
+      params:
+        - name: message
+          value: $(params.message)
+      taskSpec:
+        workspaces:
+          - name: pr
+        params:
+          - name: message
+        steps:
+          - name: write-comment
+            image: registry.access.redhat.com/ubi8/ubi-minimal:8.6-751
+            script: |
+              #!/usr/bin/env bash
+              set -xe
+              NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+              COMMENT="$(params.message)"
+              echo $COMMENT > $(workspaces.pr.path)/comments/$NOW
+    - name: pull-request-update
+      runAfter: [add-comment]
+      taskRef:
+        name: pull-request
+        kind: ClusterTask
+      workspaces:
+        - name: pr
+          workspace: pr
+      params:
+        - name: mode
+          value: upload
+        - name: url
+          value: $(params.url)
+        - name: provider
+          value: gitlab
+        - name: secret-key-ref
+          value: $(params.secret-key-ref)
