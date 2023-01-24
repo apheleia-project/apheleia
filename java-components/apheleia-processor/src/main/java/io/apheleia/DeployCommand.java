@@ -133,7 +133,8 @@ public class DeployCommand implements Runnable {
                     Optional<Path> result = registryRepositoryClient.extractImage(image.substring(image.lastIndexOf(":") + 1));
                     if (result.isPresent()) {
                         try {
-                            Files.walkFileTree(result.get().resolve(OCIRegistryRepositoryClient.ARTIFACTS),
+                            Path artifacts = result.get().resolve(OCIRegistryRepositoryClient.ARTIFACTS);
+                            Files.walkFileTree(artifacts,
                                     new SimpleFileVisitor<>() {
 
                                         @Override
@@ -144,7 +145,7 @@ public class DeployCommand implements Runnable {
                                                 boolean hasPom = files.stream().anyMatch(s -> s.toString().endsWith(".pom"));
                                                 if (hasPom) {
 
-                                                    Path relative = result.get().relativize(dir);
+                                                    Path relative = artifacts.relativize(dir);
                                                     String group = relative.getParent().getParent().toString().replace("/",
                                                             ".");
                                                     String artifact = relative.getParent().getFileName().toString();
