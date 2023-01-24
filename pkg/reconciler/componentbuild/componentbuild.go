@@ -290,7 +290,8 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 	for _, i := range cbList.Items {
 		_, exists := i.Status.ArtifactState[abr.Spec.GAV]
 		if exists {
-			_, cberr := r.handleComponentBuildReceived(ctx, log, &i)
+			cbItem := i
+			_, cberr := r.handleComponentBuildReceived(ctx, log, &cbItem)
 			if cberr != nil {
 				log.Error(cberr, fmt.Sprintf("Error handling componentbuild %s", i.Name))
 			}
