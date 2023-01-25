@@ -126,7 +126,7 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 		if aberr == nil || !errors.IsNotFound(aberr) {
 			cb.Status.ArtifactState[i] = r.artifactState(ctx, log, &existing)
 			state := cb.Status.ArtifactState[i]
-			if !state.Done() {
+			if !state.Done() && !state.Failed {
 				cb.Status.Outstanding++
 			}
 			if state.Built && !state.Deployed {
@@ -214,7 +214,7 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 				failedGavs = append(failedGavs, gav)
 			}
 		}
-		notifierMessage = fmt.Sprintf("The following dependency builds have failed: %s.", strings.Join(failedGavs[:], ","))
+		notifierMessage = fmt.Sprintf("The following dependency builds have failed: %s.", strings.Join(failedGavs[:], ", "))
 	} else if cb.Status.State == v1alpha1.ComponentBuildStateComplete {
 		notifierMessage = "/retest Success all dependency builds have completed."
 	}
@@ -242,43 +242,44 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 	return r.client.Create(ctx, tr)
 }
 
-// Attempts to deploy all the artifacts from the namespace
-// Note that this is a generic 'deploy all' task that it is running
-// so other artifacts might be deployed as well
 func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) error {
-	//first look for an existing TaskRun - If none are found create a new one
-	existing := v1beta1.TaskRunList{}
-	listOpts := &client.ListOptions{
-		Namespace:     abr.Namespace,
-		LabelSelector: labels.SelectorFromSet(map[string]string{DeployTaskLabel: abr.Name}),
-	}
-	err := r.client.List(ctx, &existing, listOpts)
-	if err != nil {
-		return err
-	}
-	for _, i := range existing.Items {
-		if i.Status.GetCondition(apis.ConditionSucceeded).IsUnknown() {
-			return nil
+	// TODO: We should throttle the creation of deploy tasks so we dont swamp the cluster
+	// We also need to review the relationship between deploy tasks, dependencybuilds and rebuiltartifacts
+	db := r.getDependencyBuild(ctx, log, abr)
+	if db != nil && db.Annotations["io.aphelia/deployed"] == "" {
+		existing := v1beta1.TaskRunList{}
+		listOpts := &client.ListOptions{
+			Namespace:     abr.Namespace,
+			LabelSelector: labels.SelectorFromSet(map[string]string{DeployTaskLabel: db.Name}),
 		}
+		err := r.client.List(ctx, &existing, listOpts)
+		if err != nil {
+			return err
+		}
+		for _, i := range existing.Items {
+			if i.Status.GetCondition(apis.ConditionSucceeded).IsUnknown() {
+				return nil
+			}
+		}
+		tr := &v1beta1.TaskRun{}
+		tr.GenerateName = abr.Name + "-deploy-task"
+		tr.Namespace = abr.Namespace
+		orerr := controllerutil.SetOwnerReference(abr, tr, r.scheme)
+		if orerr != nil {
+			log.Error(orerr, fmt.Sprintf("Error handling taskrun %s", tr.Name))
+		}
+		tr.Labels = map[string]string{DeployTaskLabel: db.Name}
+		tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
+		tr.Spec.Params = []v1beta1.Param{
+			{Name: "DOMAIN", Value: v1beta1.ArrayOrString{StringVal: "rhosak", Type: v1beta1.ParamTypeString}},
+			{Name: "OWNER", Value: v1beta1.ArrayOrString{StringVal: "237843776254", Type: v1beta1.ParamTypeString}},
+			{Name: "REPO", Value: v1beta1.ArrayOrString{StringVal: "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/", Type: v1beta1.ParamTypeString}},
+			{Name: "FORCE", Value: v1beta1.ArrayOrString{StringVal: "false", Type: v1beta1.ParamTypeString}},
+			{Name: "ARTIFACT", Value: v1beta1.ArrayOrString{StringVal: abr.Name, Type: v1beta1.ParamTypeString}},
+		}
+		return r.client.Create(ctx, tr)
 	}
-	tr := &v1beta1.TaskRun{}
-	tr.GenerateName = abr.Name + "-deploy-task"
-	tr.Namespace = abr.Namespace
-	orerr := controllerutil.SetOwnerReference(abr, tr, r.scheme)
-	if orerr != nil {
-		log.Error(orerr, fmt.Sprintf("Error handling taskrun %s", tr.Name))
-	}
-	tr.Labels = map[string]string{DeployTaskLabel: abr.Name}
-	tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
-	tr.Spec.Params = []v1beta1.Param{
-		{Name: "DOMAIN", Value: v1beta1.ArrayOrString{StringVal: "rhosak", Type: v1beta1.ParamTypeString}},
-		{Name: "OWNER", Value: v1beta1.ArrayOrString{StringVal: "237843776254", Type: v1beta1.ParamTypeString}},
-		{Name: "REPO", Value: v1beta1.ArrayOrString{StringVal: "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/", Type: v1beta1.ParamTypeString}},
-		{Name: "FORCE", Value: v1beta1.ArrayOrString{StringVal: "false", Type: v1beta1.ParamTypeString}},
-		{Name: "ARTIFACT", Value: v1beta1.ArrayOrString{StringVal: abr.Name, Type: v1beta1.ParamTypeString}},
-	}
-	return r.client.Create(ctx, tr)
-
+	return nil
 }
 func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) (reconcile.Result, error) {
 	log.Info("Handling ArtifactBuild", "name", abr.Name, "state", abr.Status.State)
@@ -335,6 +336,19 @@ func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log 
 		log.Error(err, fmt.Sprintf(msg, tr.Namespace, tr.Name, tr.Namespace, ownerName, err.Error()))
 		return reconcile.Result{}, err
 	}
+	if tr.Status.GetCondition(apis.ConditionSucceeded).IsTrue() {
+		db := r.getDependencyBuild(ctx, log, &ab)
+		if db != nil {
+			if db.Annotations == nil {
+				db.Annotations = map[string]string{}
+			}
+			db.Annotations["io.aphelia/deployed"] = "true"
+			err := r.client.Update(ctx, db)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("Error updating dependency build with deploy annotation %s", db.Name))
+			}
+		}
+	}
 	return r.handleArtifactBuildReceived(ctx, log, &ab)
 }
 
@@ -389,12 +403,35 @@ func (r *ReconcileArtifactBuild) artifactState(ctx context.Context, log logr.Log
 	built := abr.Status.State == jvmbs.ArtifactBuildStateComplete
 	deployed := false
 	if built {
-		key := types.NamespacedName{Namespace: abr.Namespace, Name: abr.Name}
-		ra := jvmbs.RebuiltArtifact{}
-		err := r.client.Get(ctx, key, &ra)
-		if err == nil && ra.Annotations["io.aphelia/deployed"] != "" {
+		db := r.getDependencyBuild(ctx, log, abr)
+		if db != nil && db.Annotations["io.aphelia/deployed"] == "true" {
 			deployed = true
 		}
 	}
 	return v1alpha1.ArtifactState{ArtifactBuild: abr.Name, Failed: failed, Built: built, Deployed: deployed}
+}
+
+func (r *ReconcileArtifactBuild) getDependencyBuild(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) *jvmbs.DependencyBuild {
+	key := types.NamespacedName{Namespace: abr.Namespace, Name: abr.Name}
+	ra := jvmbs.RebuiltArtifact{}
+	err := r.client.Get(ctx, key, &ra)
+	if err != nil {
+		return nil
+	}
+	ownerReferences := ra.GetOwnerReferences()
+	depenencyBuildName := ""
+	for _, ownerReference := range ownerReferences {
+		if ownerReference.Kind == "DependencyBuild" {
+			depenencyBuildName = ownerReference.Name
+		}
+	}
+	if depenencyBuildName != "" {
+		key := types.NamespacedName{Namespace: abr.Namespace, Name: depenencyBuildName}
+		da := jvmbs.DependencyBuild{}
+		err := r.client.Get(ctx, key, &da)
+		if err == nil {
+			return &da
+		}
+	}
+	return nil
 }
