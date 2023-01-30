@@ -27,4 +27,4 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: sdouglas/apheleia-operator:${{ GITHUB_SHA }}
+          tags: sdouglas/apheleia-operator:${GITHUB_SHA}

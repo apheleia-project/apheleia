@@ -42,6 +42,7 @@ import com.amazonaws.services.codeartifact.model.DeletePackageVersionsRequest;
 import com.amazonaws.services.codeartifact.model.GetAuthorizationTokenRequest;
 import com.amazonaws.services.codeartifact.model.PackageFormat;
 import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
+import com.amazonaws.services.codeartifact.model.ThrottlingException;
 import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
 import com.redhat.hacbs.classfile.tracker.TrackingData;
 
@@ -167,18 +168,21 @@ public class DeployCommand implements Runnable {
                                                     Pattern p = Pattern
                                                             .compile(artifact + "-" + version + "(-(\\w+))?\\.(\\w+)");
 
-                                                    try {
-                                                        DeletePackageVersionsRequest request = new DeletePackageVersionsRequest()
-                                                                .withPackage(artifact)
-                                                                .withRepository("sdouglas-scratch")
-                                                                .withDomain("rhosak")
-                                                                .withFormat(PackageFormat.Maven)
-                                                                .withNamespace(group)
-                                                                .withVersions(version);
-                                                        awsClient.deletePackageVersions(request);
-                                                    } catch (ResourceNotFoundException e) {
-                                                        //not found
-                                                    }
+                                                    handleThrottling(() -> {
+                                                        try {
+                                                            DeletePackageVersionsRequest request = new DeletePackageVersionsRequest()
+                                                                    .withPackage(artifact)
+                                                                    .withRepository("sdouglas-scratch")
+                                                                    .withDomain("rhosak")
+                                                                    .withFormat(PackageFormat.Maven)
+                                                                    .withNamespace(group)
+                                                                    .withVersions(version);
+                                                            awsClient.deletePackageVersions(request);
+
+                                                        } catch (ResourceNotFoundException e) {
+                                                            //not found
+                                                        }
+                                                    });
                                                     DeployRequest deployRequest = new DeployRequest();
                                                     deployRequest.setRepository(distRepo);
                                                     for (var i : files) {
@@ -251,6 +255,34 @@ public class DeployCommand implements Runnable {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void handleThrottling(Runnable task) {
+        for (int i = 0; i < 10; ++i) {
+            try {
+                task.run();
+            } catch (RuntimeException e) {
+                if (!isThrottle(e)) {
+                    throw e;
+                }
+            }
+            try {
+                Thread.sleep(i * 10000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    private boolean isThrottle(RuntimeException e) {
+        Throwable ex = e;
+        while (ex != null) {
+            if (ex instanceof ThrottlingException) {
+                return true;
+            }
+            ex = ex.getCause();
+        }
+        return false;
     }
 
     public static RepositorySystem newRepositorySystem() {
