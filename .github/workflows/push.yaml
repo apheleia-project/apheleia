@@ -1,4 +1,4 @@
-name: ci
+name: build-images
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
         name: Login to quay.io
         uses: docker/login-action@v2
         with:
-          registry: registry.gitlab.com
+          registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
       -
