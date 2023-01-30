@@ -4,7 +4,7 @@ COPY . .
 USER 0
 RUN microdnf --setopt=tsflags=nodocs install -y git
 RUN git clone https://github.com/redhat-appstudio/jvm-build-service.git jbs && cd jbs/java-components && mvn clean install -DskipTests && cd ../../
-RUN cd java-components && mvn clean package -DskipTests
+RUN cd java-components && mvn clean package -DskipTests -Dquarkus.package.type=jar
 
 FROM registry.access.redhat.com/ubi8/openjdk-17-runtime:1.13
 WORKDIR /work/
