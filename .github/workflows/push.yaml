@@ -31,6 +31,11 @@ jobs:
   build-analyser:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v1
+        with:
+          repository: 'redhat-appstudio/jvm-build-service'
+          path: 'jbs'
+          ref: 'main'
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v2
