@@ -27,7 +27,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: quay.io/sdouglas/apheleia-operator:${{ github.sha }}
+          tags: quay.io/mk-ci-cd/apheleia-operator:${{ github.sha }}
   build-analyser:
     runs-on: ubuntu-latest
     steps:
@@ -50,4 +50,4 @@ jobs:
         with:
           file: Dockerfile.analyser-in-ci
           push: true
-          tags: quay.io/sdouglas/apheleia-analyser:${{ github.sha }}
+          tags: quay.io/mk-ci-cd/apheleia-analyser:${{ github.sha }}
