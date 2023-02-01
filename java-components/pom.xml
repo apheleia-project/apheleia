@@ -58,22 +58,22 @@
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>com.redhat.hacbs</groupId>
+                <groupId>io.github.redhat-appstudio.jvmbuild</groupId>
                 <artifactId>hacbs-build-analyser</artifactId>
                 <version>${jvm-build-service.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.redhat.hacbs</groupId>
+                <groupId>io.github.redhat-appstudio.jvmbuild</groupId>
                 <artifactId>hacbs-resource-model</artifactId>
                 <version>${jvm-build-service.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.redhat.hacbs</groupId>
+                <groupId>io.github.redhat-appstudio.jvmbuild</groupId>
                 <artifactId>hacbs-classfile-tracker</artifactId>
                 <version>${jvm-build-service.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.redhat.hacbs</groupId>
+                <groupId>io.github.redhat-appstudio.jvmbuild</groupId>
                 <artifactId>hacbs-build-recipies-database</artifactId>
                 <version>${jvm-build-service.version}</version>
             </dependency>
