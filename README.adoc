@@ -1,0 +1,23 @@
+== Apheleia
+
+=== Development Installation
+
+These instructions should get your setup with a development version of Aphelia.
+
+You must be logged into an openshift/CRC cluster with kubeadmin rights.
+
+. Create the following public repositories on quay.io:
++
+* `quay.io/<my-quay-username>/apheleia-operator`
+* `quay.io/<my-quay-username>/apheleia-processor`
+. Run `export QUAY_USERNAME=<my-quay-username>`
+. Run `./deploy/deploy-external.sh` to install the JVM Build Service
+. Run `make dev`
+
+You should now have a fully operational Aphelia instance.
+
+==== Developer Workflow
+
+If you have changed the Java code to see these changes live you need to run `make java-dev-image`. This will push a new version of the Java image to quay.io. If you then re-trigger a workflow your new code will be pulled and ran.
+
+If you have changed the go operator code then run `make dev-image` to rebuild the operator image, then `./deploy/development.sh` in order to restart the operator. This script can also be used if you have made any yaml config changes.

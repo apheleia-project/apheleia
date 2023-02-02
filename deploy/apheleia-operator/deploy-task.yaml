@@ -21,7 +21,7 @@ spec:
       default: false
   steps:
     - name: deploy
-      image: quay.io/sdouglas/apheleia:latest
+      image: apheleia-analyser
       imagePullPolicy: Always
       args:
         - "deploy"

@@ -7,4 +7,4 @@ if [ "$1" = "" ]; then
   exit 1
 fi
 oc project $1
-kubectl apply -k $DIR/namespace
+kubectl apply -k $DIR/user-namespace
