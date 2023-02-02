@@ -1,5 +1,6 @@
 resources:
-  - config.yaml
+  - jbs-config.yaml
+  - apheleia-config.yaml
   - quota.yaml
   - notifier-pipeline.yaml
 

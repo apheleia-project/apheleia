@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apheleia-config
+data:
+  maven-repo: "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/"
+  aws-domain: "rhosak"
+  aws-owner: "237843776254"

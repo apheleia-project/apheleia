@@ -67,7 +67,7 @@ public class DeployCommand implements Runnable {
     @CommandLine.Option(names = "--owner", defaultValue = "237843776254")
     String owner;
 
-    @CommandLine.Option(names = "--repo", defaultValue = "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/")
+    @CommandLine.Option(names = "--repo")
     String repo;
 
     @CommandLine.Option(names = "--artifact", defaultValue = "all")
