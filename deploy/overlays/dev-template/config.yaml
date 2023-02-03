@@ -1,0 +1,7 @@
+---
+apiVersion: jvmbuildservice.io/v1alpha1
+kind: JBSConfig
+metadata:
+  name: jvm-build-config
+spec:
+  owner: QUAY_USERNAME

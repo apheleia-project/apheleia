@@ -36,7 +36,7 @@ generate-deepcopy-client:
 
 generate-crds:
 	hack/install-controller-gen.sh
-	"$(CONTROLLER_GEN)" "$(CRD_OPTIONS)" rbac:roleName=manager-role webhook paths=./pkg/apis/apheleia/v1alpha1 output:crd:artifacts:config=deployment/crds/
+	"$(CONTROLLER_GEN)" "$(CRD_OPTIONS)" rbac:roleName=manager-role webhook paths=./pkg/apis/apheleia/v1alpha1 output:crd:artifacts:config=deploy/crds/
 
 generate: generate-crds generate-deepcopy-client
 
@@ -47,12 +47,12 @@ dev-image:
 	docker build . -t quay.io/$(QUAY_USERNAME)/apheleia-controller:dev
 	docker push quay.io/$(QUAY_USERNAME)/apheleia-controller:dev
 
-dev: dev-image
+java-dev-image:
 	cd java-components && mvn clean install -Dlocal -DskipTests
 
-dev-openshift: dev
-	./deploy/openshift-development.sh
 
+dev: dev-image java-dev-image
+	./deploy/development.sh
 
 dev-minikube: dev
 	./deploy/minikube-development.sh

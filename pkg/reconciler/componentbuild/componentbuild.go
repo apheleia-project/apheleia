@@ -31,6 +31,10 @@ const (
 	contextTimeout      = 300 * time.Second
 	DeployTaskLabel     = "apheleia.io/deploy-task"
 	NotifyPipelineLabel = "apheleia.io/notify-pipeline"
+	ApheleiaConfig      = "apheleia-config"
+	MavenRepo           = "maven-repo"
+	AWSDomain           = "aws-domain"
+	AWSOwner            = "aws-owner"
 )
 
 type ReconcileArtifactBuild struct {
@@ -115,6 +119,34 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Context, log logr.Logger, cb *v1alpha1.ComponentBuild) (reconcile.Result, error) {
 	log.Info("Handling ComponentBuild", "name", cb.Name, "outstanding", cb.Status.Outstanding, "state", cb.Status.State)
 
+	//we need to make sure we have a deploy config. If not we don't do anything
+	cm := v1.ConfigMap{}
+	err := r.client.Get(ctx, types.NamespacedName{Namespace: cb.Namespace, Name: ApheleiaConfig}, &cm)
+	deployUrl := ""
+	deployDomain := ""
+	deployOwner := ""
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, err
+		}
+	} else {
+		deployUrl = cm.Data[MavenRepo]
+		deployOwner = cm.Data[AWSOwner]
+		deployDomain = cm.Data[AWSDomain]
+	}
+	const NoConfigMessage = "Some or all deployment config missing, please create a apheleia-config config map with the following keys: maven-repo, aws-owner, aws-domain"
+	if len(deployUrl) == 0 || len(deployOwner) == 0 || len(deployDomain) == 0 {
+		cb.Status.Message = NoConfigMessage
+		err := r.client.Status().Update(ctx, cb)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		log.Info("No Deployment URL set, please create a apheleia-config config map with a maven-repo key, then retry the job.", "namespace", cb.Namespace)
+		return reconcile.Result{}, nil
+	} else if cb.Status.Message == NoConfigMessage {
+		cb.Status.Message = ""
+	}
+
 	//iterate over the spec, and calculate the corresponding status
 	cb.Status.Outstanding = 0
 	cb.Status.ArtifactState = map[string]v1alpha1.ArtifactState{}
@@ -130,7 +162,7 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 				cb.Status.Outstanding++
 			}
 			if state.Built && !state.Deployed {
-				derr := r.deployArtifact(ctx, log, &existing)
+				derr := r.deployArtifact(ctx, log, &existing, deployUrl, deployOwner, deployDomain)
 				if derr != nil {
 					log.Error(derr, "Error deploying artifact", "name", existing.Name)
 				}
@@ -174,7 +206,7 @@ func (r *ReconcileArtifactBuild) handleComponentBuildReceived(ctx context.Contex
 		cb.Status.State = v1alpha1.ComponentBuildStateInProgress
 		cb.Status.ResultNotified = false
 	}
-	err := r.client.Status().Update(ctx, cb)
+	err = r.client.Status().Update(ctx, cb)
 	return reconcile.Result{}, err
 }
 
@@ -242,10 +274,10 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 	return r.client.Create(ctx, tr)
 }
 
-func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) error {
+func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild, deployUrl string, owner string, domain string) error {
 	// TODO: We should throttle the creation of deploy tasks so we dont swamp the cluster
 	// We also need to review the relationship between deploy tasks, dependencybuilds and rebuiltartifacts
-	db := r.getDependencyBuild(ctx, log, abr)
+	db := r.getDependencyBuild(ctx, abr)
 	if db != nil && db.Annotations["io.aphelia/deployed"] == "" {
 		existing := v1beta1.TaskRunList{}
 		listOpts := &client.ListOptions{
@@ -271,9 +303,9 @@ func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Lo
 		tr.Labels = map[string]string{DeployTaskLabel: db.Name}
 		tr.Spec.TaskRef = &v1beta1.TaskRef{Name: "apheleia-deploy", Kind: v1beta1.ClusterTaskKind}
 		tr.Spec.Params = []v1beta1.Param{
-			{Name: "DOMAIN", Value: v1beta1.ArrayOrString{StringVal: "rhosak", Type: v1beta1.ParamTypeString}},
-			{Name: "OWNER", Value: v1beta1.ArrayOrString{StringVal: "237843776254", Type: v1beta1.ParamTypeString}},
-			{Name: "REPO", Value: v1beta1.ArrayOrString{StringVal: "https://rhosak-237843776254.d.codeartifact.us-east-2.amazonaws.com/maven/sdouglas-scratch/", Type: v1beta1.ParamTypeString}},
+			{Name: "DOMAIN", Value: v1beta1.ArrayOrString{StringVal: domain, Type: v1beta1.ParamTypeString}},
+			{Name: "OWNER", Value: v1beta1.ArrayOrString{StringVal: owner, Type: v1beta1.ParamTypeString}},
+			{Name: "REPO", Value: v1beta1.ArrayOrString{StringVal: deployUrl, Type: v1beta1.ParamTypeString}},
 			{Name: "FORCE", Value: v1beta1.ArrayOrString{StringVal: "false", Type: v1beta1.ParamTypeString}},
 			{Name: "ARTIFACT", Value: v1beta1.ArrayOrString{StringVal: abr.Name, Type: v1beta1.ParamTypeString}},
 		}
@@ -303,7 +335,7 @@ func (r *ReconcileArtifactBuild) handleArtifactBuildReceived(ctx context.Context
 
 func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log logr.Logger, tr *v1beta1.TaskRun) (reconcile.Result, error) {
 	log.Info("Handling TaskRun", "name", tr.Name)
-	if tr.Status.CompletionTime == nil || tr.Labels["tekton.dev/clusterTask"] != "apheleia-deploy" {
+	if tr.Status.CompletionTime == nil || tr.Labels[DeployTaskLabel] == "" {
 		return reconcile.Result{}, nil
 	}
 	ownerRefs := tr.GetOwnerReferences()
@@ -337,7 +369,7 @@ func (r *ReconcileArtifactBuild) handleTaskRunReceived(ctx context.Context, log 
 		return reconcile.Result{}, err
 	}
 	if tr.Status.GetCondition(apis.ConditionSucceeded).IsTrue() {
-		db := r.getDependencyBuild(ctx, log, &ab)
+		db := r.getDependencyBuild(ctx, &ab)
 		if db != nil {
 			if db.Annotations == nil {
 				db.Annotations = map[string]string{}
@@ -403,7 +435,7 @@ func (r *ReconcileArtifactBuild) artifactState(ctx context.Context, log logr.Log
 	built := abr.Status.State == jvmbs.ArtifactBuildStateComplete
 	deployed := false
 	if built {
-		db := r.getDependencyBuild(ctx, log, abr)
+		db := r.getDependencyBuild(ctx, abr)
 		if db != nil && db.Annotations["io.aphelia/deployed"] == "true" {
 			deployed = true
 		}
@@ -411,7 +443,7 @@ func (r *ReconcileArtifactBuild) artifactState(ctx context.Context, log logr.Log
 	return v1alpha1.ArtifactState{ArtifactBuild: abr.Name, Failed: failed, Built: built, Deployed: deployed}
 }
 
-func (r *ReconcileArtifactBuild) getDependencyBuild(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild) *jvmbs.DependencyBuild {
+func (r *ReconcileArtifactBuild) getDependencyBuild(ctx context.Context, abr *jvmbs.ArtifactBuild) *jvmbs.DependencyBuild {
 	key := types.NamespacedName{Namespace: abr.Namespace, Name: abr.Name}
 	ra := jvmbs.RebuiltArtifact{}
 	err := r.client.Get(ctx, key, &ra)

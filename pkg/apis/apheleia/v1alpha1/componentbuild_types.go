@@ -41,9 +41,8 @@ type ComponentBuild struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec    ComponentBuildSpec   `json:"spec"`
-	Status  ComponentBuildStatus `json:"status,omitempty"`
-	Message string               `json:"message,omitempty"`
+	Spec   ComponentBuildSpec   `json:"spec"`
+	Status ComponentBuildStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -8,8 +8,4 @@ resources:
   - sa.yaml
   - rbac.yaml
   - deploy-task.yaml
-
-images:
-  - name: apheleia-operator
-    newName: quay.io/sdouglas/apheleia-controller
-    newTag: dev
+  - openshift-specific-rbac.yaml
