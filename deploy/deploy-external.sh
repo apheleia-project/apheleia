@@ -14,6 +14,7 @@ if [ "$1" != "--force" ]; then
         exit 1
     fi
 fi
+echo "Applying tekton"
 kubectl apply -k $DIR/tekton
+echo "Now applying build-operator"
 kubectl apply -k $DIR/build-operator
-

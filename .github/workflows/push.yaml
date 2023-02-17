@@ -50,4 +50,4 @@ jobs:
         with:
           file: Dockerfile.analyser-in-ci
           push: true
-          tags: quay.io/mk-ci-cd/apheleia-analyser:${{ github.sha }}
+          tags: quay.io/mk-ci-cd/apheleia-processor:${{ github.sha }}
