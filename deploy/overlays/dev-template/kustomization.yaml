@@ -28,3 +28,24 @@ patches:
   target:
     name: jvm-build-config
     kind: JBSConfig
+- patch: |-
+    - op: replace
+      path: "/data/maven-repo"
+      value: "AWS_MAVEN_REPO"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
+- patch: |-
+    - op: replace
+      path: "/data/aws-owner"
+      value: "AWS_OWNER"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
+- patch: |-
+    - op: replace
+      path: "/data/aws-domain"
+      value: "AWS_DOMAIN"
+  target:
+    name: apheleia-config
+    kind: ConfigMap

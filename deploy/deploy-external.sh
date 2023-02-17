@@ -15,13 +15,6 @@ if [ "$1" != "--force" ]; then
     fi
 fi
 
-if [ -z "$AWS_SECRET_KEY" ] || [ -z "$AWS_ACCESS_KEY" ]; then
-    echo "Set AWS_SECRET_KEY and AWS_ACCESS_KEY so that the aws-secret may be created"
-    exit 1
-fi
-kubectl delete secret aws-secrets --ignore-not-found
-kubectl create secret generic aws-secrets --from-literal=access-key=$AWS_ACCESS_KEY --from-literal=secret-key=$AWS_SECRET_KEY
-
 echo "Applying tekton"
 kubectl apply -k $DIR/tekton
 echo "Now applying build-operator"
