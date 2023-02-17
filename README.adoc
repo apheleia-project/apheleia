@@ -5,6 +5,7 @@
 These instructions should get your setup with a development version of Aphelia.
 
 You must be logged into an openshift/CRC cluster with kubeadmin rights.
+Ensure that Docker is logged into Quay.io and the entry in `docker/config.json` has been created.
 
 . Create the following public repositories on quay.io:
 +

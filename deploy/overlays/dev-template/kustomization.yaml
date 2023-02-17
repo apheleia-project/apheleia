@@ -19,3 +19,12 @@ patchesJson6902:
   target:
     name: apheleia-deploy
     kind: ClusterTask
+
+patches:
+- patch: |-
+    - op: replace
+      path: "/spec/owner"
+      value: "QUAY_USERNAME"
+  target:
+    name: jvm-build-config
+    kind: JBSConfig
