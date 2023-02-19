@@ -5,7 +5,16 @@
 These instructions should get your setup with a development version of Aphelia.
 
 You must be logged into an openshift/CRC cluster with kubeadmin rights.
+Ensure that Docker is logged into Quay.io and the entry in `docker/config.json` has been created.
 
+==== Amazon Setup
+* Create a CodeArtifact repository and a secret/access-key.
+* Set the environment variables AWS_SECRET_KEY and AWS_ACCESS_KEY so that the AWS CodeArtifact repository may be used.
+* Export AWS_MAVEN_REPO to refer to the full repository URL.
+* Export AWS_DOMAIN (default: `rhosak`) and AWS_OWNER (default: `237843776254`).
+
+
+==== General
 . Create the following public repositories on quay.io:
 +
 * `quay.io/<my-quay-username>/apheleia-operator`

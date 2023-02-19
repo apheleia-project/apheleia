@@ -21,7 +21,7 @@ spec:
       default: false
   steps:
     - name: deploy
-      image: apheleia-analyser
+      image: apheleia-processor
       imagePullPolicy: Always
       args:
         - "deploy"

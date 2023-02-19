@@ -14,6 +14,8 @@ if [ "$1" != "--force" ]; then
         exit 1
     fi
 fi
-kubectl apply -k $DIR/tekton
-kubectl apply -k $DIR/build-operator
 
+echo "Applying tekton"
+kubectl apply -k $DIR/tekton
+echo "Now applying build-operator"
+kubectl apply -k $DIR/build-operator

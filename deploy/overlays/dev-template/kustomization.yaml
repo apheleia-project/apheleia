@@ -10,6 +10,42 @@ images:
   - name: apheleia-operator
     newName: quay.io/QUAY_USERNAME/apheleia-controller
     newTag: dev
-  - name: apheleia-analyser
-    newName: quay.io/QUAY_USERNAME/apheleia-analyser
-    newTag: dev
+
+patchesJson6902:
+- patch: |-
+    - op: replace
+      path: "/spec/steps/0/image"
+      value: "quay.io/QUAY_USERNAME/apheleia-processor:dev"
+  target:
+    name: apheleia-deploy
+    kind: ClusterTask
+
+patches:
+- patch: |-
+    - op: replace
+      path: "/spec/owner"
+      value: "QUAY_USERNAME"
+  target:
+    name: jvm-build-config
+    kind: JBSConfig
+- patch: |-
+    - op: replace
+      path: "/data/maven-repo"
+      value: "AWS_MAVEN_REPO"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
+- patch: |-
+    - op: replace
+      path: "/data/aws-owner"
+      value: "AWS_OWNER"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
+- patch: |-
+    - op: replace
+      path: "/data/aws-domain"
+      value: "AWS_DOMAIN"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
