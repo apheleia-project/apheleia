@@ -32,12 +32,12 @@ find $DIR -path \*development\*.yaml -exec sed -i "s#AWS_MAVEN_REPO#${AWS_MAVEN_
 if [ -n "$AWS_DOMAIN" ]; then
     find $DIR -path \*development\*.yaml -exec sed -i s/AWS_DOMAIN/${AWS_DOMAIN}/ {} \;
 else
-    find $DIR -path \*development\*.yaml -exec sed -i s/AWS_DOMAIN/$(yq '.data.aws-domain' user-namespace/apheleia-config.yaml)/ {} \;
+    find $DIR -path \*development\*.yaml -exec sed -i s/AWS_DOMAIN/$(yq '.data.aws-domain' $DIR/user-namespace/apheleia-config.yaml)/ {} \;
 fi
 if [ -n "$AWS_OWNER" ]; then
     find $DIR -path \*development\*.yaml -exec sed -i s/AWS_OWNER/${AWS_OWNER}/ {} \;
 else
-    find $DIR -path \*development\*.yaml -exec sed -i s/AWS_OWNER/$(yq '.data.aws-owner' user-namespace/apheleia-config.yaml)/ {} \;
+    find $DIR -path \*development\*.yaml -exec sed -i s/AWS_OWNER/$(yq '.data.aws-owner' $DIR/user-namespace/apheleia-config.yaml)/ {} \;
 fi
 
 kubectl apply -k $DIR/overlays/development

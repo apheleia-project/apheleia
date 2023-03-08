@@ -90,10 +90,18 @@ public class DeployCommand implements Runnable {
             LocalRepository localRepo = new LocalRepository(Files.createTempDirectory("apheleia").toFile());
             session.setLocalRepositoryManager(system.newLocalRepositoryManager(session, localRepo));
 
-            var awsClient = AWSCodeArtifactClientBuilder.standard().withRegion(Regions.US_EAST_2).build();
+            String regionSub = repo.substring(0, repo.lastIndexOf(".amazonaws.com"));
+            String repoName = repo.substring(repo.lastIndexOf("maven/") + 6, repo.length() - 1);
+            Regions region = Regions.fromName(regionSub.substring(regionSub.lastIndexOf('.') + 1));
+            Log.infof("Deploying to %s, using region %s and repository %s", repo, region, repoName);
+
+            var awsClient = AWSCodeArtifactClientBuilder.standard()
+                    .withRegion(region)
+                    .build();
             final String token = awsClient.getAuthorizationToken(new GetAuthorizationTokenRequest()
                     .withDomain(domain)
                     .withDomainOwner(owner)).getAuthorizationToken();
+
             RemoteRepository distRepo = new RemoteRepository.Builder("repo",
                     "default",
                     repo)
@@ -162,7 +170,7 @@ public class DeployCommand implements Runnable {
                                                             ".");
                                                     String artifact = relative.getParent().getFileName().toString();
                                                     String version = dir.getFileName().toString();
-                                                    System.out.println(
+                                                    Log.info(
                                                             "GROUP: " + group + " , ART:" + artifact + " , VERSION: "
                                                                     + version);
                                                     Pattern p = Pattern
@@ -172,13 +180,13 @@ public class DeployCommand implements Runnable {
                                                         try {
                                                             DeletePackageVersionsRequest request = new DeletePackageVersionsRequest()
                                                                     .withPackage(artifact)
-                                                                    .withRepository("sdouglas-scratch")
-                                                                    .withDomain("rhosak")
+                                                                    .withRepository(repoName)
+                                                                    .withDomain(domain)
                                                                     .withFormat(PackageFormat.Maven)
                                                                     .withNamespace(group)
                                                                     .withVersions(version);
-                                                            awsClient.deletePackageVersions(request);
-
+                                                            var result = awsClient.deletePackageVersions(request);
+                                                            Log.infof("Deleted packages %s", result);
                                                         } catch (ResourceNotFoundException e) {
                                                             //not found
                                                         }
@@ -214,6 +222,7 @@ public class DeployCommand implements Runnable {
                                                     }
 
                                                     try {
+                                                        Log.infof("Deploying %s", deployRequest);
                                                         system.deploy(session, deployRequest);
                                                     } catch (DeploymentException e) {
                                                         throw new RuntimeException(e);
