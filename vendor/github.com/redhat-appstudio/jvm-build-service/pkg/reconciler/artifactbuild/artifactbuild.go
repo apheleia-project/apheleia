@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"  //#nosec G501
 	"crypto/sha1" //#nosec G505
+	_ "embed"
 	"encoding/hex"
 	"fmt"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/systemconfig"
@@ -13,7 +14,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/kcp-dev/logicalcluster/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +26,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1"
-	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/pendingpipelinerun"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/util"
 	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 )
@@ -41,6 +40,7 @@ const (
 	ArtifactBuildIdLabel          = "jvmbuildservice.io/abr-id"
 	PipelineResultScmUrl          = "scm-url"
 	PipelineResultScmTag          = "scm-tag"
+	PipelineResultScmHash         = "scm-hash"
 	PipelineResultScmType         = "scm-type"
 	PipelineResultContextPath     = "context"
 	PipelineResultMessage         = "message"
@@ -49,15 +49,16 @@ const (
 	JavaCommunityDependencies     = "JAVA_COMMUNITY_DEPENDENCIES"
 	Contaminants                  = "CONTAMINANTS"
 	DeployedResources             = "DEPLOYED_RESOURCES"
+	PassedVerification            = "PASSED_VERIFICATION" //#nosec
 	Image                         = "IMAGE"
 	Rebuild                       = "jvmbuildservice.io/rebuild"
+	Verify                        = "jvmbuildservice.io/verify"
 )
 
 type ReconcileArtifactBuild struct {
 	client        client.Client
 	scheme        *runtime.Scheme
 	eventRecorder record.EventRecorder
-	prCreator     pendingpipelinerun.PipelineRunCreate
 }
 
 func newReconciler(mgr ctrl.Manager) reconcile.Reconciler {
@@ -65,20 +66,18 @@ func newReconciler(mgr ctrl.Manager) reconcile.Reconciler {
 		client:        mgr.GetClient(),
 		scheme:        mgr.GetScheme(),
 		eventRecorder: mgr.GetEventRecorderFor("ArtifactBuild"),
-		prCreator:     &pendingpipelinerun.PendingCreate{},
 	}
 }
+
+//go:embed scripts/keystore.sh
+var keystore string
 
 func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// Set the ctx to be Background, as the top-level context for incoming requests.
 	var cancel context.CancelFunc
-	if request.ClusterName != "" {
-		// use logicalcluster.ClusterFromContxt(ctx) to retrieve this value later on
-		ctx = logicalcluster.WithCluster(ctx, logicalcluster.New(request.ClusterName))
-	}
 	ctx, cancel = context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
-	log := ctrl.Log.WithName("artifactbuild").WithValues("request", request.NamespacedName).WithValues("cluster", request.ClusterName)
+	log := ctrl.Log.WithName("artifactbuild").WithValues("request", request.NamespacedName)
 	//_, clusterSet := logicalcluster.ClusterFromContext(ctx)
 	//if !clusterSet {
 	//	log.Info("cluster is not set in context", request.String())
@@ -138,6 +137,7 @@ func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcil
 		return r.handlePipelineRunReceived(ctx, log, &pr)
 
 	case abrerr == nil:
+		// TODO: if verify = true, then find dependency build and add veify = false to dep build, add ourself to the owner references, if new dep created, also add it to that
 		//log.Info("cluster set on obj ", r.clusterSetOnObj(&abr))
 		//first check for a rebuild annotation
 		if abr.Annotations[Rebuild] == "true" {
@@ -180,7 +180,7 @@ func (r *ReconcileArtifactBuild) handlePipelineRunReceived(ctx context.Context, 
 	if pr.Status.PipelineResults != nil {
 		for _, prRes := range pr.Status.PipelineResults {
 			if prRes.Name == JavaCommunityDependencies {
-				return reconcile.Result{}, r.handleCommunityDependencies(ctx, strings.Split(prRes.Value, ","), pr.Namespace, log)
+				return reconcile.Result{}, r.handleCommunityDependencies(ctx, strings.Split(prRes.Value.StringVal, ","), pr.Namespace, log)
 			}
 		}
 	}
@@ -223,17 +223,19 @@ func (r *ReconcileArtifactBuild) handlePipelineRunReceived(ctx context.Context, 
 	for _, res := range pr.Status.PipelineResults {
 		switch res.Name {
 		case PipelineResultScmUrl:
-			abr.Status.SCMInfo.SCMURL = res.Value
+			abr.Status.SCMInfo.SCMURL = res.Value.StringVal
 		case PipelineResultScmTag:
-			abr.Status.SCMInfo.Tag = res.Value
+			abr.Status.SCMInfo.Tag = res.Value.StringVal
+		case PipelineResultScmHash:
+			abr.Status.SCMInfo.CommitHash = res.Value.StringVal
 		case PipelineResultScmType:
-			abr.Status.SCMInfo.SCMType = res.Value
+			abr.Status.SCMInfo.SCMType = res.Value.StringVal
 		case PipelineResultMessage:
-			abr.Status.Message = res.Value
+			abr.Status.Message = res.Value.StringVal
 		case PipelineResultContextPath:
-			abr.Status.SCMInfo.Path = res.Value
+			abr.Status.SCMInfo.Path = res.Value.StringVal
 		case PipelineResultPrivate:
-			private, err := strconv.ParseBool(res.Value)
+			private, err := strconv.ParseBool(res.Value.StringVal)
 			if err != nil {
 				private = false
 			}
@@ -326,11 +328,14 @@ func (r *ReconcileArtifactBuild) handleStateNew(ctx context.Context, log logr.Lo
 			TaskSpec: &pipelinev1beta1.EmbeddedTask{
 				TaskSpec: *task,
 			},
+			Workspaces: []pipelinev1beta1.WorkspacePipelineTaskBinding{{Name: "tls", Workspace: "tls"}},
 		}},
-		Results: []pipelinev1beta1.PipelineResult{},
+		Results:    []pipelinev1beta1.PipelineResult{},
+		Workspaces: []pipelinev1beta1.PipelineWorkspaceDeclaration{{Name: "tls"}},
 	}
+	pr.Spec.Workspaces = []pipelinev1beta1.WorkspaceBinding{{Name: "tls", ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: v1alpha1.TlsConfigMapName}}}}
 	for _, i := range task.Results {
-		pr.Spec.PipelineSpec.Results = append(pr.Spec.PipelineSpec.Results, pipelinev1beta1.PipelineResult{Name: i.Name, Description: i.Description, Value: "$(tasks." + TaskName + ".results." + i.Name + ")"})
+		pr.Spec.PipelineSpec.Results = append(pr.Spec.PipelineSpec.Results, pipelinev1beta1.PipelineResult{Name: i.Name, Type: pipelinev1beta1.ResultsTypeString, Description: i.Description, Value: pipelinev1beta1.ResultValue{Type: pipelinev1beta1.ParamTypeString, StringVal: "$(tasks." + TaskName + ".results." + i.Name + ")"}})
 	}
 
 	pr.Labels = map[string]string{ArtifactBuildIdLabel: ABRLabelForGAV(abr.Spec.GAV), PipelineRunLabel: ""}
@@ -342,7 +347,7 @@ func (r *ReconcileArtifactBuild) handleStateNew(ctx context.Context, log logr.Lo
 		return reconcile.Result{}, err
 	}
 
-	if err := r.prCreator.CreateWrapperForPipelineRun(ctx, r.client, &pr); err != nil {
+	if err := r.client.Create(ctx, &pr); err != nil {
 		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, nil
@@ -416,11 +421,12 @@ func (r *ReconcileArtifactBuild) handleStateDiscovering(ctx context.Context, log
 			return reconcile.Result{}, err
 		}
 		db.Spec = v1alpha1.DependencyBuildSpec{ScmInfo: v1alpha1.SCMInfo{
-			SCMURL:  abr.Status.SCMInfo.SCMURL,
-			SCMType: abr.Status.SCMInfo.SCMType,
-			Tag:     abr.Status.SCMInfo.Tag,
-			Path:    abr.Status.SCMInfo.Path,
-			Private: abr.Status.SCMInfo.Private,
+			SCMURL:     abr.Status.SCMInfo.SCMURL,
+			SCMType:    abr.Status.SCMInfo.SCMType,
+			Tag:        abr.Status.SCMInfo.Tag,
+			CommitHash: abr.Status.SCMInfo.CommitHash,
+			Path:       abr.Status.SCMInfo.Path,
+			Private:    abr.Status.SCMInfo.Private,
 		}, Version: abr.Spec.GAV[strings.LastIndex(abr.Spec.GAV, ":")+1:]}
 		if err := r.client.Status().Update(ctx, abr); err != nil {
 			return reconcile.Result{}, err
@@ -460,7 +466,7 @@ func ABRLabelForGAV(hashInput string) string {
 func (r *ReconcileArtifactBuild) handleStateComplete(ctx context.Context, log logr.Logger, abr *v1alpha1.ArtifactBuild) (reconcile.Result, error) {
 	for key, value := range abr.Annotations {
 		if strings.HasPrefix(key, DependencyBuildContaminatedBy) {
-			log.Info("Attempting to resolve contamination", "artifactbuild", abr.Name)
+			log.Info("Attempting to resolve contamination for items that depend on this ArtifactBuild", "completed-artifact-build", abr.Name)
 			db := v1alpha1.DependencyBuild{}
 			if err := r.client.Get(ctx, types.NamespacedName{Name: value, Namespace: abr.Namespace}, &db); err != nil {
 				r.eventRecorder.Eventf(abr, corev1.EventTypeNormal, "CannotGetDependencyBuild", "Could not find the contaminated DependencyBuild for ArtifactBuild %s/%s: %s", abr.Namespace, abr.Name, err.Error())
@@ -476,11 +482,12 @@ func (r *ReconcileArtifactBuild) handleStateComplete(ctx context.Context, log lo
 					newContaminates = append(newContaminates, contaminant)
 				}
 			}
-			log.Info("Attempting to resolve contamination for dependencybuild", "dependencybuild", db.Name, "old", db.Status.Contaminants, "new", newContaminates)
+			log.Info("Attempting to resolve contamination for dependencybuild", "dependencybuild", db.Name+"-"+db.Spec.ScmInfo.SCMURL+"-"+db.Spec.ScmInfo.Tag, "old", db.Status.Contaminants, "new", newContaminates)
 			db.Status.Contaminants = newContaminates
 			if len(db.Status.Contaminants) == 0 {
 				//TODO: we could have a situation where there are still some contamination, but not for artifacts that we care about
 				//kick off the build again
+				log.Info("Contamination resolved, moving to state new", "dependencybuild", db.Name+"-"+db.Spec.ScmInfo.SCMURL+"-"+db.Spec.ScmInfo.Tag)
 				db.Status.State = v1alpha1.DependencyBuildStateNew
 			}
 			if err := r.client.Status().Update(ctx, &db); err != nil {
@@ -660,10 +667,16 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 	recipes = recipes + settingOrDefault(systemConfig.Spec.RecipeDatabase, v1alpha1.DefaultRecipeDatabase)
 
 	zero := int64(0)
+	cacheUrl := "https://jvm-build-workspace-artifact-cache-tls." + jbsConfig.Namespace + ".svc.cluster.local/v2/cache/user/default"
+	if jbsConfig.Spec.CacheSettings.DisableTLS {
+		cacheUrl = "http://jvm-build-workspace-artifact-cache." + jbsConfig.Namespace + ".svc.cluster.local/v2/cache/user/default"
+	}
 	return &pipelinev1beta1.TaskSpec{
+		Workspaces: []pipelinev1beta1.WorkspaceDeclaration{{Name: "tls"}},
 		Results: []pipelinev1beta1.TaskResult{
 			{Name: PipelineResultScmUrl},
 			{Name: PipelineResultScmTag},
+			{Name: PipelineResultScmHash},
 			{Name: PipelineResultScmType},
 			{Name: PipelineResultContextPath},
 			{Name: PipelineResultPrivate},
@@ -671,9 +684,10 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 		},
 		Steps: []pipelinev1beta1.Step{
 			{
-				Name:  "lookup-artifact-location",
-				Image: image,
-				Args: []string{
+				Name:            "lookup-artifact-location",
+				Image:           image,
+				SecurityContext: &corev1.SecurityContext{RunAsUser: &zero},
+				Script: InstallKeystoreIntoBuildRequestProcessor([]string{
 					"lookup-scm",
 					"--recipes",
 					recipes,
@@ -681,6 +695,8 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 					"$(results." + PipelineResultScmUrl + ".path)",
 					"--scm-tag",
 					"$(results." + PipelineResultScmTag + ".path)",
+					"--scm-hash",
+					"$(results." + PipelineResultScmHash + ".path)",
 					"--scm-type",
 					"$(results." + PipelineResultScmType + ".path)",
 					"--message",
@@ -692,11 +708,8 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 					"--gav",
 					gav,
 					"--cache-url",
-					"http://jvm-build-workspace-artifact-cache." + jbsConfig.Namespace + ".svc.cluster.local/v1/cache/default/0",
-				},
-				SecurityContext: &corev1.SecurityContext{
-					RunAsUser: &zero,
-				},
+					cacheUrl,
+				}),
 				Env: []corev1.EnvVar{
 					{Name: "GIT_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: v1alpha1.GitSecretName}, Key: v1alpha1.GitSecretTokenKey, Optional: &trueBool}}},
 				},
@@ -734,4 +747,16 @@ func settingOrDefault(setting, def string) string {
 		return def
 	}
 	return setting
+}
+
+func InstallKeystoreIntoBuildRequestProcessor(args []string) string {
+	ret := keystore + "\n/opt/jboss/container/java/run/run-java.sh"
+	for _, i := range args {
+		ret += " \"" + i + "\""
+	}
+	return ret
+}
+
+func InstallKeystoreScript() string {
+	return keystore
 }

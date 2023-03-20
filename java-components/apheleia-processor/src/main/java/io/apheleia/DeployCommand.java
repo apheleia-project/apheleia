@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +42,6 @@ import com.amazonaws.services.codeartifact.model.GetAuthorizationTokenRequest;
 import com.amazonaws.services.codeartifact.model.PackageFormat;
 import com.amazonaws.services.codeartifact.model.ResourceNotFoundException;
 import com.amazonaws.services.codeartifact.model.ThrottlingException;
-import com.redhat.hacbs.classfile.tracker.ClassFileTracker;
-import com.redhat.hacbs.classfile.tracker.TrackingData;
 
 import io.apheleia.jvmbuildservice.model.JBSConfig;
 import io.apheleia.jvmbuildservice.model.RebuiltArtifact;
@@ -196,22 +193,6 @@ public class DeployCommand implements Runnable {
                                                     for (var i : files) {
                                                         Matcher matcher = p.matcher(i.getFileName().toString());
                                                         if (matcher.matches()) {
-                                                            if (matcher.group(3).equals("jar")) {
-                                                                var in = Files.readAllBytes(i);
-                                                                var out = ClassFileTracker.addTrackingDataToJar(in,
-                                                                        new TrackingData(group + ":" + artifact + ":" + version,
-                                                                                "rebuilt",
-                                                                                Collections.emptyMap()));
-                                                                Files.write(i, out);
-                                                                Files.writeString(
-                                                                        i.getParent()
-                                                                                .resolve(i.getFileName().toString() + ".md5"),
-                                                                        HashUtil.md5(out));
-                                                                Files.writeString(
-                                                                        i.getParent()
-                                                                                .resolve(i.getFileName().toString() + ".sha1"),
-                                                                        HashUtil.sha1(out));
-                                                            }
                                                             Artifact jarArtifact = new DefaultArtifact(group, artifact,
                                                                     matcher.group(2),
                                                                     matcher.group(3),
