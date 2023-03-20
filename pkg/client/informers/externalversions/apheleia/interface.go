@@ -18,8 +18,8 @@ limitations under the License.
 package apheleia
 
 import (
-	v1alpha1 "github.com/stuartwdouglas/apheleia/pkg/client/informers/externalversions/apheleia/v1alpha1"
-	internalinterfaces "github.com/stuartwdouglas/apheleia/pkg/client/informers/externalversions/internalinterfaces"
+	v1alpha1 "github.com/apheleia-project/apheleia/pkg/client/informers/externalversions/apheleia/v1alpha1"
+	internalinterfaces "github.com/apheleia-project/apheleia/pkg/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.

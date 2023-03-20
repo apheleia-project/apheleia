@@ -1,12 +1,9 @@
-module github.com/stuartwdouglas/apheleia
+module github.com/apheleia-project/apheleia
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-logr/logr v1.2.2
-	github.com/kcp-dev/apimachinery v0.0.0-20220803185518-868856d14e8a // indirect
-	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.1
-	github.com/onsi/gomega v1.19.0
 	github.com/openshift/api v0.0.0-20211203173402-b8f149d82307
 	github.com/openshift/client-go v0.0.0-20210521082421-73d9475a9142
 	github.com/tektoncd/pipeline v0.37.4
@@ -15,7 +12,7 @@ require (
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v0.24.3
 	k8s.io/code-generator v0.24.3
-	k8s.io/klog/v2 v2.60.1
+	k8s.io/klog/v2 v2.60.1 // indirect
 	knative.dev/pkg v0.0.0-20220329144915-0a1ec2e0d46c
 	sigs.k8s.io/controller-runtime v0.12.2
 )
@@ -58,6 +55,8 @@ require (
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/kcp-dev/apimachinery v0.0.0-20220803185518-868856d14e8a // indirect
+	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

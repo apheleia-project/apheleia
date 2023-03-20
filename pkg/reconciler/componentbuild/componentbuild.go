@@ -3,8 +3,7 @@ package componentbuild
 import (
 	"context"
 	"fmt"
-	"github.com/kcp-dev/logicalcluster/v2"
-	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
+	"github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -54,13 +53,9 @@ func newReconciler(mgr ctrl.Manager) reconcile.Reconciler {
 func (r *ReconcileArtifactBuild) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// Set the ctx to be Background, as the top-level context for incoming requests.
 	var cancel context.CancelFunc
-	if request.ClusterName != "" {
-		// use logicalcluster.ClusterFromContxt(ctx) to retrieve this value later on
-		ctx = logicalcluster.WithCluster(ctx, logicalcluster.New(request.ClusterName))
-	}
 	ctx, cancel = context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
-	log := ctrl.Log.WithName("artifactbuild").WithValues("request", request.NamespacedName).WithValues("cluster", request.ClusterName)
+	log := ctrl.Log.WithName("artifactbuild").WithValues("request", request.NamespacedName)
 
 	abr := jvmbs.ArtifactBuild{}
 	abrerr := r.client.Get(ctx, request.NamespacedName, &abr)

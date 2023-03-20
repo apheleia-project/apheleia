@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
+	"github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
 )
 
 func init() {

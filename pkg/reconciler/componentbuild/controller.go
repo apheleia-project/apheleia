@@ -1,7 +1,7 @@
 package componentbuild
 
 import (
-	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
+	"github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -10,7 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/kcp-dev/logicalcluster/v2"
 	jvmbs "github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1"
 )
 
@@ -25,7 +24,6 @@ func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 						Name:      artifactBuild.Name,
 						Namespace: artifactBuild.Namespace,
 					},
-					ClusterName: logicalcluster.From(artifactBuild).String(),
 				},
 			}
 		})).
@@ -37,7 +35,6 @@ func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 						Name:      pipelineRun.Name,
 						Namespace: pipelineRun.Namespace,
 					},
-					ClusterName: logicalcluster.From(pipelineRun).String(),
 				},
 			}
 		})).
@@ -49,7 +46,6 @@ func SetupNewReconcilerWithManager(mgr ctrl.Manager) error {
 						Name:      taskRun.Name,
 						Namespace: taskRun.Namespace,
 					},
-					ClusterName: logicalcluster.From(taskRun).String(),
 				},
 			}
 		})).

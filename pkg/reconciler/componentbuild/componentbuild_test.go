@@ -2,9 +2,9 @@ package componentbuild
 
 import (
 	"context"
+	"github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
+	aph "github.com/apheleia-project/apheleia/pkg/client/clientset/versioned/scheme"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/artifactbuild"
-	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
-	aph "github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/apis"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -18,7 +18,6 @@ import (
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/clusterresourcequota"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 
-	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
