@@ -16,7 +16,7 @@ spec:
       containers:
         - name: apheleia-operator
           image: apheleia-operator
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           args:
             - "--v=4"
             - "--zap-log-level=4"
