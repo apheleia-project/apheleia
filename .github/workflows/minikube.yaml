@@ -16,5 +16,5 @@ jobs:
           eval $(minikube -p minikube docker-env)
           docker build -f ./Dockerfile -t local/apheleia-operator:dev .
           docker build -f ./Dockerfile.analyser-in-ci -t local/apheleia-processor:dev .
-      - name: Deploy To MiniKube
-        run: ./deploy/minikube.sh
+          ./deploy/minikube.sh
+          make minikube-test
