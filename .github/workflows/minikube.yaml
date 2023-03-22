@@ -1,0 +1,20 @@
+name: Validate PR - Minikube Tests
+on:
+  pull_request:
+    branches: [ main ]
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+    name: Minikube based CI
+    steps:
+      - uses: actions/checkout@v2
+      - name: Start minikube
+        uses: medyagh/setup-minikube@master
+      - name: Build Images
+        run: |
+          export SHELL=/bin/bash
+          eval $(minikube -p minikube docker-env)
+          docker build -f ./Dockerfile -t local/apheleia-operator:dev .
+          docker build -f ./Dockerfile.analyser-in-ci -t local/apheleia-processor:dev .
+          ./deploy/minikube.sh
+          make minikube-test
