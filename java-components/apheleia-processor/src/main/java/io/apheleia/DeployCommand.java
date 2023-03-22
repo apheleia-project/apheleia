@@ -251,6 +251,7 @@ public class DeployCommand implements Runnable {
         for (int i = 0; i < 10; ++i) {
             try {
                 task.run();
+                return;
             } catch (RuntimeException e) {
                 if (!isThrottle(e)) {
                     throw e;
