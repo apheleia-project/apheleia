@@ -18,7 +18,7 @@ limitations under the License.
 package fake
 
 import (
-	apheleiav1alpha1 "github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
+	apheleiav1alpha1 "github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

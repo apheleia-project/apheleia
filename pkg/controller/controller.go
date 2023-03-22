@@ -3,8 +3,8 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
-	"github.com/stuartwdouglas/apheleia/pkg/reconciler/componentbuild"
+	"github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
+	"github.com/apheleia-project/apheleia/pkg/reconciler/componentbuild"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"time"

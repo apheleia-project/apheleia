@@ -22,9 +22,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned"
-	apheleia "github.com/stuartwdouglas/apheleia/pkg/client/informers/externalversions/apheleia"
-	internalinterfaces "github.com/stuartwdouglas/apheleia/pkg/client/informers/externalversions/internalinterfaces"
+	versioned "github.com/apheleia-project/apheleia/pkg/client/clientset/versioned"
+	apheleia "github.com/apheleia-project/apheleia/pkg/client/informers/externalversions/apheleia"
+	internalinterfaces "github.com/apheleia-project/apheleia/pkg/client/informers/externalversions/internalinterfaces"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

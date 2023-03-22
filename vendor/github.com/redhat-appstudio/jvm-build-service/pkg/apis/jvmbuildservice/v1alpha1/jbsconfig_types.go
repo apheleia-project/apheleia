@@ -6,6 +6,8 @@ const (
 	JBSConfigName                           = "jvm-build-config"
 	ImageSecretName                         = "jvm-build-image-secrets" //#nosec
 	GitSecretName                           = "jvm-build-git-secrets"   //#nosec
+	TlsSecretName                           = "jvm-build-tls-secrets"   //#nosec
+	TlsConfigMapName                        = "jvm-build-tls-ca"        //#nosec
 	ImageSecretTokenKey                     = ".dockerconfigjson"       //#nosec
 	GitSecretTokenKey                       = ".git-credentials"        //#nosec
 	CacheDeploymentName                     = "jvm-build-workspace-artifact-cache"
@@ -21,6 +23,10 @@ const (
 type JBSConfigSpec struct {
 	EnableRebuilds bool `json:"enableRebuilds,omitempty"`
 
+	// If this is true then the build will fail if artifact verification fails
+	// otherwise deploy will happen as normal, but a field will be set on the DependencyBuild
+	RequireArtifactVerification bool `json:"requireArtifactVerification,omitempty"`
+
 	AdditionalRecipes []string `json:"additionalRecipes,omitempty"`
 
 	MavenBaseLocations map[string]string `json:"mavenBaseLocations,omitempty"`
@@ -32,6 +38,7 @@ type JBSConfigSpec struct {
 }
 
 type JBSConfigStatus struct {
+	Message string `json:"message,omitempty"`
 }
 
 type CacheSettings struct {
@@ -42,6 +49,7 @@ type CacheSettings struct {
 	IOThreads     string `json:"ioThreads,omitempty"`
 	WorkerThreads string `json:"workerThreads,omitempty"`
 	Storage       string `json:"storage,omitempty"`
+	DisableTLS    bool   `json:"disableTLS,omitempty"`
 }
 
 type BuildSettings struct {
@@ -89,6 +97,7 @@ type Pattern struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=jbsconfigs,scope=Namespaced
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // JBSConfig TODO provide godoc description
 type JBSConfig struct {
 	metav1.TypeMeta   `json:",inline"`

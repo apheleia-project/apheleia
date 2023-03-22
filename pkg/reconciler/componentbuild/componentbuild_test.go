@@ -2,9 +2,10 @@ package componentbuild
 
 import (
 	"context"
+	"github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
+	aph "github.com/apheleia-project/apheleia/pkg/client/clientset/versioned/scheme"
+	. "github.com/onsi/gomega"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/artifactbuild"
-	"github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
-	aph "github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/apis"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -13,12 +14,9 @@ import (
 	"time"
 
 	quotav1 "github.com/openshift/api/quota/v1"
-	fakequotaclientset "github.com/openshift/client-go/quota/clientset/versioned/fake"
 	jbs "github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1"
-	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/clusterresourcequota"
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 
-	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -50,7 +48,6 @@ func setupClientAndReconciler(objs ...runtimeclient.Object) (runtimeclient.Clien
 	cm.Name = ApheleiaConfig
 	cm.Data = map[string]string{MavenRepo: DummyRepo, AWSDomain: DummyDomain, AWSOwner: DummyOwner}
 	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithObjects(&cm).Build()
-	clusterresourcequota.QuotaClient = fakequotaclientset.NewSimpleClientset()
 	reconciler := &ReconcileArtifactBuild{client: client, scheme: scheme, eventRecorder: &record.FakeRecorder{}}
 	return client, reconciler
 }

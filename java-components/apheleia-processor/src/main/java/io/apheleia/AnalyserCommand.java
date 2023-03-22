@@ -266,9 +266,10 @@ public class AnalyserCommand implements Runnable {
                 additional.addAll(i);
             }
         }
+
         //now figure out the additional GAV's
         for (var i : additional) {
-            boolean inGradleCache = i.getParent().getFileName().toString().length() == 40;
+            boolean inGradleCache = i.getParent().getFileName().toString().length() >= 39;
             //gradle repo layout is different to maven
             //we use a different strategy to determine the GAV
             if (gradle) {

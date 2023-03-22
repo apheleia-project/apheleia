@@ -2,19 +2,19 @@ package main
 
 import (
 	"flag"
+	"k8s.io/klog/v2"
 	"os"
 
 	// needed for hack/update-codegen.sh
 	_ "k8s.io/code-generator"
 
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/apheleia-project/apheleia/pkg/controller"
 	//+kubebuilder:scaffold:imports
 	"github.com/go-logr/logr"
-	"github.com/stuartwdouglas/apheleia/pkg/controller"
 )
 
 var (

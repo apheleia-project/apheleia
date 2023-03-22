@@ -18,7 +18,7 @@ echo "To modify the current version, please modify this in the go.mod"
 echo ""
 
 GOFLAGS="" GOPATH=${GOPATH} /bin/bash ${CODEGEN_PKG}/generate-groups.sh "deepcopy,client,informer,lister" \
-  github.com/stuartwdouglas/apheleia/pkg/client \
-  github.com/stuartwdouglas/apheleia/pkg/apis \
+  github.com/apheleia-project/apheleia/pkg/client \
+  github.com/apheleia-project/apheleia/pkg/apis \
   "apheleia:v1alpha1" \
   --go-header-file "${SCRIPT_ROOT}/hack/boilerplate.go.txt"

@@ -20,8 +20,8 @@ package v1alpha1
 import (
 	"net/http"
 
-	v1alpha1 "github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1"
-	"github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned/scheme"
+	v1alpha1 "github.com/apheleia-project/apheleia/pkg/apis/apheleia/v1alpha1"
+	"github.com/apheleia-project/apheleia/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
