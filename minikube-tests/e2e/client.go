@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	apheleiaclientset "github.com/apheleia-project/apheleia/pkg/client/clientset/versioned"
 	jvmclientset "github.com/redhat-appstudio/jvm-build-service/pkg/client/clientset/versioned"
-	apheleiaclientset "github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned"
 	pipelineclientset "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"

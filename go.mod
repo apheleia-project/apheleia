@@ -23,7 +23,6 @@ require (
 )
 
 require (
-	github.com/stuartwdouglas/apheleia v0.0.0-20230208112316-f33d22216913
 	k8s.io/cli-runtime v0.24.3
 )
 

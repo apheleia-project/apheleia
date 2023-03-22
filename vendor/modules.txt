@@ -204,12 +204,6 @@ github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/util
 # github.com/spf13/pflag v1.0.5
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stuartwdouglas/apheleia v0.0.0-20230208112316-f33d22216913
-## explicit; go 1.17
-github.com/stuartwdouglas/apheleia/pkg/apis/apheleia/v1alpha1
-github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned
-github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned/scheme
-github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned/typed/apheleia/v1alpha1
 # github.com/tektoncd/pipeline v0.41.1
 ## explicit; go 1.18
 github.com/tektoncd/pipeline/config
