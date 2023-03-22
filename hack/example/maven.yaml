@@ -16,10 +16,7 @@ spec:
   workspaces:
     - name: source
       description: The workspace consisting of maven project.
-    - name: maven-settings
-      description: >-
-        The workspace consisting of the custom maven settings
-        provided by the user.
+    - name: artifacts
   params:
     - name: MAVEN_IMAGE
       type: string
@@ -67,20 +64,19 @@ spec:
       script: |
         #!/usr/bin/env bash
 
-        mvn -B -e -DskipTests clean package -Denforcer.skip
+        mvn -Dmaven.repo.local=$(workspaces.artifacts.path) -B -e -DskipTests clean package -Denforcer.skip
 
     - name: analyse-dependencies
       securityContext:
         runAsUser: 0
       image: local/apheleia-processor:dev
       imagePullPolicy: Never
+      command: ["/opt/jboss/container/java/run/run-java.sh"] #Do not delete this line, it will break local image support
       args:
         - analyse
         - --maven-repo
-        - "$HOME/.m2/repository"
+        - $(workspaces.artifacts.path)
         - --create-artifacts
-        - --git-url
-        - "$(params.GIT_URL)"
         - --git-url
         - "$(params.GIT_URL)"
         - --tag
