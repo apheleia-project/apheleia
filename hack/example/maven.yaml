@@ -64,7 +64,7 @@ spec:
       script: |
         #!/usr/bin/env bash
 
-        mvn -Dmaven.repo.local=$(workspaces.artifacts.path) -B -e -DskipTests clean package -Denforcer.skip
+        mvn -B -Dmaven.repo.local=$(workspaces.artifacts.path) -B -e -DskipTests clean package -Denforcer.skip
 
     - name: analyse-dependencies
       securityContext:
