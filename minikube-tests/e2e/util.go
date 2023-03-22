@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	v1 "k8s.io/api/rbac/v1"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	projectv1 "github.com/openshift/api/project/v1"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1"
 	jvmclientset "github.com/redhat-appstudio/jvm-build-service/pkg/client/clientset/versioned"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/artifactbuild"
@@ -122,9 +122,9 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 
 	if len(ta.ns) == 0 {
 		ta.ns = generateName(testNamespace)
-		_, err := projectClient.ProjectV1().ProjectRequests().Create(context.Background(), &projectv1.ProjectRequest{
-			ObjectMeta: metav1.ObjectMeta{Name: ta.ns},
-		}, metav1.CreateOptions{})
+		namespace := &corev1.Namespace{}
+		namespace.Name = ta.ns
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), namespace, metav1.CreateOptions{})
 
 		if err != nil {
 			debugAndFailTest(ta, fmt.Sprintf("%#v", err))
@@ -133,30 +133,29 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 
 	dumpNodes(ta)
 
-	var err error
-	err = wait.PollImmediate(1*time.Second, 1*time.Minute, func() (done bool, err error) {
-		_, err = kubeClient.CoreV1().ServiceAccounts(ta.ns).Get(context.TODO(), "pipeline", metav1.GetOptions{})
-		if err != nil {
-			ta.Logf(fmt.Sprintf("get of pipeline SA err: %s", err.Error()))
-			return false, nil
-		}
-		return true, nil
-	})
+	//create the ServiceAccount
+	sa := corev1.ServiceAccount{}
+	sa.Name = "pipeline"
+	sa.Namespace = ta.ns
+	_, err := kubeClient.CoreV1().ServiceAccounts(ta.ns).Create(context.Background(), &sa, metav1.CreateOptions{})
+	if err != nil {
+		debugAndFailTest(ta, "pipeline SA not created in timely fashion")
+	}
+	//now create the binding
+	crb := v1.ClusterRoleBinding{}
+	crb.Name = "pipeline-" + ta.ns
+	crb.Namespace = ta.ns
+	crb.RoleRef.Name = "pipeline"
+	crb.RoleRef.Kind = "ClusterRole"
+	crb.Subjects = []v1.Subject{{Name: "pipeline", Kind: "ServiceAccount", Namespace: ta.ns}}
+	_, err = kubeClient.RbacV1().ClusterRoleBindings().Create(context.Background(), &crb, metav1.CreateOptions{})
 	if err != nil {
 		debugAndFailTest(ta, "pipeline SA not created in timely fashion")
 	}
 
-	// have seen delays in CRD presence along with missing pipeline SA
-	err = wait.PollImmediate(1*time.Second, 1*time.Minute, func() (done bool, err error) {
-		_, err = apiextensionClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), "tasks.tekton.dev", metav1.GetOptions{})
-		if err != nil {
-			ta.Logf(fmt.Sprintf("get of task CRD: %s", err.Error()))
-			return false, nil
-		}
-		return true, nil
-	})
+	path, err := os.Getwd()
 	if err != nil {
-		debugAndFailTest(ta, "task CRD not present in timely fashion")
+		debugAndFailTest(ta, err.Error())
 	}
 
 	ta.gitClone = &v1beta1.Task{}
@@ -170,6 +169,42 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 	if err != nil {
 		debugAndFailTest(ta, err.Error())
 	}
+
+	mavenYamlPath := filepath.Join(path, "..", "..", "hack", "example", "maven.yaml")
+	ta.maven = &v1beta1.Task{}
+	obj = streamFileYamlToTektonObj(mavenYamlPath, ta.maven, ta)
+	ta.maven, ok = obj.(*v1beta1.Task)
+	if !ok {
+		debugAndFailTest(ta, fmt.Sprintf("%s did not produce a task: %#v", gitCloneTaskUrl, obj))
+	}
+	ta.maven, err = tektonClient.TektonV1beta1().Tasks(ta.ns).Create(context.TODO(), ta.maven, metav1.CreateOptions{})
+	if err != nil {
+		debugAndFailTest(ta, err.Error())
+	}
+
+	pipelineYamlPath := filepath.Join(path, "..", "..", "hack", "example", "pipeline.yaml")
+	ta.pipeline = &v1beta1.Pipeline{}
+	obj = streamFileYamlToTektonObj(pipelineYamlPath, ta.pipeline, ta)
+	ta.pipeline, ok = obj.(*v1beta1.Pipeline)
+	if !ok {
+		debugAndFailTest(ta, fmt.Sprintf("%s did not produce a task: %#v", gitCloneTaskUrl, obj))
+	}
+	ta.pipeline, err = tektonClient.TektonV1beta1().Pipelines(ta.ns).Create(context.TODO(), ta.pipeline, metav1.CreateOptions{})
+	if err != nil {
+		debugAndFailTest(ta, err.Error())
+	}
+	runYamlPath := filepath.Join(path, "..", "..", "hack", "example", "run-e2e-shaded-app.yaml")
+	ta.run = &v1beta1.PipelineRun{}
+	obj = streamFileYamlToTektonObj(runYamlPath, ta.run, ta)
+	ta.run, ok = obj.(*v1beta1.PipelineRun)
+	if !ok {
+		debugAndFailTest(ta, fmt.Sprintf("file %s did not produce a pipelinerun: %#v", runYamlPath, obj))
+	}
+	ta.run, err = tektonClient.TektonV1beta1().PipelineRuns(ta.ns).Create(context.TODO(), ta.run, metav1.CreateOptions{})
+	if err != nil {
+		debugAndFailTest(ta, err.Error())
+	}
+
 	owner := os.Getenv("QUAY_E2E_ORGANIZATION")
 	if owner == "" {
 		owner = "redhat-appstudio-qe"
@@ -197,27 +232,6 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 				Owner:      owner,
 				Repository: "test-images",
 				PrependTag: strconv.FormatInt(time.Now().UnixMilli(), 10),
-			},
-			RelocationPatterns: []v1alpha1.RelocationPatternElement{
-				{
-					RelocationPattern: v1alpha1.RelocationPattern{
-						BuildPolicy: "default",
-						Patterns: []v1alpha1.PatternElement{
-							{
-								Pattern: v1alpha1.Pattern{
-									From: "(io.github.stuartwdouglas.hacbs-test.simple):(simple-jdk17):(99-does-not-exist)",
-									To:   "io.github.stuartwdouglas.hacbs-test.simple:simple-jdk17:0.1.2",
-								},
-							},
-							{
-								Pattern: v1alpha1.Pattern{
-									From: "org.graalvm.sdk:graal-sdk:21.3.2",
-									To:   "org.graalvm.sdk:graal-sdk:21.3.2.0-1-redhat-00001",
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 		Status: v1alpha1.JBSConfigStatus{},
@@ -250,7 +264,16 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 	return ta
 }
 
-func bothABsAndDBsGenerated(ta *testArgs) (bool, error) {
+func bothCbsABsAndDBsGenerated(ta *testArgs) (bool, error) {
+	cbList, err := apheleiaClient.ApheleiaV1alpha1().ComponentBuilds(ta.ns).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		ta.Logf(fmt.Sprintf("error listing componentbuilds: %s", err.Error()))
+		return false, nil
+	}
+	gotCBs := false
+	if len(cbList.Items) > 0 {
+		gotCBs = true
+	}
 	abList, err := jvmClient.JvmbuildserviceV1alpha1().ArtifactBuilds(ta.ns).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		ta.Logf(fmt.Sprintf("error listing artifactbuilds: %s", err.Error()))
@@ -269,7 +292,7 @@ func bothABsAndDBsGenerated(ta *testArgs) (bool, error) {
 	if len(dbList.Items) > 0 {
 		gotDBs = true
 	}
-	if gotABs && gotDBs {
+	if gotABs && gotDBs && gotCBs {
 		return true, nil
 	}
 	return false, nil
@@ -456,12 +479,12 @@ func GenerateStatusReport(namespace string, jvmClient *jvmclientset.Clientset, k
 		localDir := db.Status.State + "/" + db.Name
 		tmp := db
 		tool := "maven"
-		if db.Status.CurrentBuildRecipe != nil {
-			tool = db.Status.CurrentBuildRecipe.Tool
-		}
-		if db.Status.FailedVerification {
-			tool += " (FAILED VERIFICATION)"
-		}
+		//if db.Status.CurrentBuildRecipe != nil {
+		//	tool = db.Status.CurrentBuildRecipe.Tool
+		//}
+		//if db.Status.FailedVerification {
+		//	tool += " (FAILED VERIFICATION)"
+		//}
 		instance := &ReportInstanceData{State: db.Status.State, Yaml: encodeToYaml(&tmp), Name: fmt.Sprintf("%s @{%s} (%s) %s", db.Spec.ScmInfo.SCMURL, db.Spec.ScmInfo.Tag, db.Name, tool)}
 		dependency.Instances = append(dependency.Instances, instance)
 		print(db.Status.State + "\n")
@@ -478,17 +501,17 @@ func GenerateStatusReport(namespace string, jvmClient *jvmclientset.Clientset, k
 			dependency.Other++
 		}
 		_ = os.MkdirAll(directory+"/"+localDir, 0755) //#nosec G306 G301
-		for index, docker := range db.Status.DiagnosticDockerFiles {
-
-			localPart := localDir + "-docker-" + strconv.Itoa(index) + ".txt"
-			fileName := directory + "/" + localPart
-			err = os.WriteFile(fileName, []byte(docker), 0644) //#nosec G306
-			if err != nil {
-				print(fmt.Sprintf("Failed to write docker filer %s: %s", fileName, err))
-			} else {
-				instance.Logs = append(instance.Logs, localPart)
-			}
-		}
+		//for index, docker := range db.Status.DiagnosticDockerFiles {
+		//
+		//	localPart := localDir + "-docker-" + strconv.Itoa(index) + ".txt"
+		//	fileName := directory + "/" + localPart
+		//	err = os.WriteFile(fileName, []byte(docker), 0644) //#nosec G306
+		//	if err != nil {
+		//		print(fmt.Sprintf("Failed to write docker filer %s: %s", fileName, err))
+		//	} else {
+		//		instance.Logs = append(instance.Logs, localPart)
+		//	}
+		//}
 		for _, pod := range podList.Items {
 			if strings.HasPrefix(pod.Name, db.Name) {
 				logFile := dumpPod(pod, directory, localDir, podClient, true)

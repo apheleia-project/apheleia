@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	projectset "github.com/openshift/client-go/project/clientset/versioned"
 	jvmclientset "github.com/redhat-appstudio/jvm-build-service/pkg/client/clientset/versioned"
+	apheleiaclientset "github.com/stuartwdouglas/apheleia/pkg/client/clientset/versioned"
 	pipelineclientset "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -20,9 +20,9 @@ import (
 var (
 	kubeConfig         *rest.Config
 	kubeClient         *kubeset.Clientset
-	projectClient      *projectset.Clientset
 	tektonClient       *pipelineclientset.Clientset
 	jvmClient          *jvmclientset.Clientset
+	apheleiaClient     *apheleiaclientset.Clientset
 	apiextensionClient *apiextensionsclient.Clientset
 )
 
@@ -76,13 +76,12 @@ func setupClients(t *testing.T) {
 		}
 	}
 
-	if projectClient == nil {
-		projectClient, err = projectset.NewForConfig(kubeConfig)
+	if apheleiaClient == nil {
+		apheleiaClient, err = apheleiaclientset.NewForConfig(kubeConfig)
 		if err != nil {
 			t.Fatalf("%#v", err)
 		}
 	}
-
 	if apiextensionClient == nil {
 		apiextensionClient, err = apiextensionsclient.NewForConfig(kubeConfig)
 		if err != nil {
