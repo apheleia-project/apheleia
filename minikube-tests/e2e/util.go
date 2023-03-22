@@ -205,6 +205,15 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 		debugAndFailTest(ta, err.Error())
 	}
 
+	cm := corev1.ConfigMap{}
+	cm.Namespace = ta.ns
+	cm.Name = "apheleia-config"
+	cm.Data = map[string]string{"maven-repo": "https://todo.com", "aws-owner": "todo", "aws-domain": "todo"}
+	_, err = kubeClient.CoreV1().ConfigMaps(ta.ns).Create(context.Background(), &cm, metav1.CreateOptions{})
+	if err != nil {
+		debugAndFailTest(ta, err.Error())
+	}
+
 	owner := os.Getenv("QUAY_E2E_ORGANIZATION")
 	if owner == "" {
 		owner = "redhat-appstudio-qe"
