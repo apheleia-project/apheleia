@@ -54,8 +54,8 @@ java-dev-image:
 dev: dev-image java-dev-image
 	./deploy/development.sh
 
-dev-minikube: dev
-	./deploy/minikube-development.sh
+minikube-test:
+	KUBERNETES_CONFIG=${KUBECONFIG} go test -count 1 -tags normal -timeout 20m -v ./minikube-test/...
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.

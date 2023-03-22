@@ -15,6 +15,8 @@ then
   kubectl apply -k $DIR/build-operator
 fi
 
+kubectl create sa pipeline
+
 kubectl apply -f $DIR/ci-namespace.yaml
 
 kubectl config set-context --current --namespace=apheleia-ci

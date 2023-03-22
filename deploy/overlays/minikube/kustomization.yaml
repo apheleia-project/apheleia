@@ -5,17 +5,18 @@ resources:
  - "../../crds"
  - "../../apheleia-operator"
  - "../../user-namespace"
+ - "rbac.yaml"
 
 images:
   - name: apheleia-operator
-    newName: local/apheleia-operator
-    newTag: dev
+    newName: quay.io/mk-ci-cd/apheleia-operator-test
+    newTag: replace-tag-name
 
 patchesJson6902:
 - patch: |-
     - op: replace
       path: "/spec/steps/0/image"
-      value: "local/apheleia-processor:dev"
+      value: "quay.io/mk-ci-cd/apheleia-processor-test:replace-tag-name"
   target:
     name: apheleia-deploy
     kind: ClusterTask

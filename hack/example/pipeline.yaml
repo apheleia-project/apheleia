@@ -1,0 +1,55 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: sample-component-build
+spec:
+  params:
+    - name: url
+    - default: ""
+      description: Revision to checkout. (branch, tag, sha, ref, etc...)
+      name: revision
+    - name: context
+      default: ""
+    - name: app-path
+      default: "target"
+  workspaces:
+    - name: shared-workspace
+    - name: maven-settings
+  tasks:
+    - name: fetch-repository
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+      params:
+        - name: url
+          value: "$(params.url)"
+        - name: revision
+          value: "$(params.revision)"
+        - name: subdirectory
+          value: ""
+        - name: deleteExisting
+          value: "true"
+    - name: maven-run
+      taskRef:
+        name: maven
+      runAfter:
+        - fetch-repository
+      params:
+        - name: MAVEN_MIRROR_URL
+          value: http://jvm-build-workspace-artifact-cache.$(context.taskRun.namespace).svc.cluster.local
+        - name: GIT_URL
+          value: "$(params.url)"
+        - name: GIT_TAG
+          value: "$(params.revision)"
+        - name: CONTEXT_DIR
+          value: "$(params.context)"
+        - name: DEPENDENCY_ANALYSER_PATH
+          value: "$(params.app-path)"
+      workspaces:
+        - name: maven-settings
+          workspace: maven-settings
+        - name: source
+          workspace: shared-workspace
+
