@@ -14,7 +14,7 @@ spec:
       default: "target"
   workspaces:
     - name: shared-workspace
-    - name: maven-settings
+    - name: artifacts
   tasks:
     - name: fetch-repository
       taskRef:
@@ -48,8 +48,8 @@ spec:
         - name: DEPENDENCY_ANALYSER_PATH
           value: "$(params.app-path)"
       workspaces:
-        - name: maven-settings
-          workspace: maven-settings
+        - name: artifacts
+          workspace: artifacts
         - name: source
           workspace: shared-workspace
 

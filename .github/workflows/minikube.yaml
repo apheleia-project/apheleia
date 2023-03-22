@@ -8,23 +8,13 @@ jobs:
     name: Minikube based CI
     steps:
       - uses: actions/checkout@v2
-      - name: Login to quay.io
-        uses: docker/login-action@v2
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
       - name: Start minikube
         uses: medyagh/setup-minikube@master
       - name: Build Images
         run: |
           export SHELL=/bin/bash
           eval $(minikube -p minikube docker-env)
-          export TAG=$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT
-          docker build -f ./Dockerfile -t quay.io/mk-ci-cd/apheleia-operator-test:$TAG .
-          docker build -f ./Dockerfile.analyser-in-ci -t quay.io/mk-ci-cd/apheleia-processor-test:$TAG .
-          docker push quay.io/mk-ci-cd/apheleia-operator-test:$TAG
-          docker push quay.io/mk-ci-cd/apheleia-processor-test:$TAG
-          find . -name \*.yaml -exec sed -i s/replace-tag-name/$TAG/ {} \;
+          docker build -f ./Dockerfile -t local/apheleia-operator:dev .
+          docker build -f ./Dockerfile.analyser-in-ci -t local/apheleia-processor:dev .
       - name: Deploy To MiniKube
         run: ./deploy/minikube.sh

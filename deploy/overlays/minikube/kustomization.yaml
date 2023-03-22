@@ -9,14 +9,14 @@ resources:
 
 images:
   - name: apheleia-operator
-    newName: quay.io/mk-ci-cd/apheleia-operator-test
-    newTag: replace-tag-name
+    newName: local/apheleia-operator
+    newTag: dev
 
 patchesJson6902:
 - patch: |-
     - op: replace
       path: "/spec/steps/0/image"
-      value: "quay.io/mk-ci-cd/apheleia-processor-test:replace-tag-name"
+      value: "local/apheleia-processor:dev"
   target:
     name: apheleia-deploy
     kind: ClusterTask
