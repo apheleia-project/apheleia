@@ -235,6 +235,7 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 				RequestMemory: "1024Mi",
 				LimitMemory:   "1024Mi",
 				WorkerThreads: "100",
+				DisableTLS:    true,
 			},
 			ImageRegistry: v1alpha1.ImageRegistry{
 				Host:       "quay.io",

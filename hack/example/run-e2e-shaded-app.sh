@@ -10,7 +10,7 @@ echo "👉 Registering sample pipeline:"
 echo
 
 kubectl apply -f $DIR/maven.yaml
-kubectl apply -f https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml
+kubectl apply -f $DIR/git-clone.yaml
 
 kubectl apply -f $DIR/pipeline.yaml
 

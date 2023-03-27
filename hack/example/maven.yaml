@@ -69,9 +69,8 @@ spec:
     - name: analyse-dependencies
       securityContext:
         runAsUser: 0
-      image: local/apheleia-processor:dev
-      imagePullPolicy: Never
-      command: ["/opt/jboss/container/java/run/run-java.sh"] #Do not delete this line, it will break local image support
+      image: quay.io/sdouglas/apheleia-processor:dev
+      imagePullPolicy: IfNotPresent
       args:
         - analyse
         - --maven-repo
