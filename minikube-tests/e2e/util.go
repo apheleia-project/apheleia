@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	v13 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"net/http"
 	"os"
 	"path/filepath"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,6 +40,8 @@ import (
 	v12 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 )
+
+const ServiceRegistryAuth = "testuser:$2y$05$Srpa4/8QOg4V/S6hHqcRF.XPTgCGzF5IOk9FQKvnfG2d3KRqJVikm"
 
 func generateName(base string) string {
 	if len(base) > maxGeneratedNameLength {
@@ -213,11 +218,9 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 	if err != nil {
 		debugAndFailTest(ta, err.Error())
 	}
+	deployDockerRegistry(ta)
 
-	owner := os.Getenv("QUAY_E2E_ORGANIZATION")
-	if owner == "" {
-		owner = "redhat-appstudio-qe"
-	}
+	owner := "testuser"
 	jbsConfig := v1alpha1.JBSConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ta.ns,
@@ -238,9 +241,11 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 				DisableTLS:    true,
 			},
 			ImageRegistry: v1alpha1.ImageRegistry{
-				Host:       "quay.io",
+				Host:       "registry." + ta.ns + ".svc.cluster.local",
 				Owner:      owner,
 				Repository: "test-images",
+				Port:       "80",
+				Insecure:   true,
 				PrependTag: strconv.FormatInt(time.Now().UnixMilli(), 10),
 			},
 		},
@@ -250,12 +255,8 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 	if err != nil {
 		debugAndFailTest(ta, err.Error())
 	}
-	decoded, err := base64.StdEncoding.DecodeString(os.Getenv("QUAY_TOKEN"))
-	if err != nil {
-		debugAndFailTest(ta, err.Error())
-	}
 	secret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "jvm-build-image-secrets", Namespace: ta.ns},
-		Data: map[string][]byte{".dockerconfigjson": decoded}}
+		Data: map[string][]byte{".dockerconfigjson": []byte("{\"auths\":{\"registry." + ta.ns + ".svc.cluster.local\":{\"auth\": \"" + base64.StdEncoding.EncodeToString([]byte("testuser:testpassword")) + "\"}}}")}}
 	_, err = kubeClient.CoreV1().Secrets(ta.ns).Create(context.TODO(), &secret, metav1.CreateOptions{})
 	if err != nil {
 		debugAndFailTest(ta, err.Error())
@@ -272,6 +273,82 @@ func setup(t *testing.T, ta *testArgs) *testArgs {
 		debugAndFailTest(ta, "cache not present in timely fashion")
 	}
 	return ta
+}
+
+func deployDockerRegistry(ta *testArgs) {
+
+	cm := corev1.ConfigMap{}
+	cm.Name = "registry-auth"
+	cm.Namespace = ta.ns
+	cm.Data = map[string]string{"htpasswd": ServiceRegistryAuth + "\n"}
+	kubeClient.CoreV1().ConfigMaps(ta.ns).Create(context.Background(), &cm, metav1.CreateOptions{})
+
+	var one int32 = 1
+	deployment := v13.Deployment{}
+	deployment.Name = "registry"
+	deployment.Namespace = ta.ns
+	deployment.Spec.Replicas = &one
+	deployment.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"app": "registry"}}
+	deployment.Spec.Template = corev1.PodTemplateSpec{}
+	deployment.Spec.Template.Labels = map[string]string{"app": "registry"}
+	deployment.Spec.Template.Spec.Containers = []corev1.Container{
+		{
+			Name:  "registry",
+			Image: "registry:2",
+			Ports: []corev1.ContainerPort{{
+				Name:          "http",
+				ContainerPort: 5000,
+			}},
+			Env: []corev1.EnvVar{
+				{
+					Name:  "REGISTRY_AUTH_HTPASSWD_PATH",
+					Value: "/auth/htpasswd",
+				}, {
+					Name:  "REGISTRY_AUTH",
+					Value: "htpasswd",
+				}, {
+					Name:  "REGISTRY_AUTH_HTPASSWD_REALM",
+					Value: "Registry Realm",
+				},
+			},
+			VolumeMounts: []corev1.VolumeMount{{
+				Name:      "auth",
+				MountPath: "/auth",
+			}},
+		},
+	}
+	deployment.Spec.Template.Spec.Volumes = []corev1.Volume{{
+		Name:         "auth",
+		VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "registry-auth"}}},
+	}}
+	_, err := kubeClient.AppsV1().Deployments(ta.ns).Create(context.Background(), &deployment, metav1.CreateOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	//and setup the service
+
+	service := corev1.Service{
+		ObjectMeta: ctrl.ObjectMeta{
+			Name:      "registry",
+			Namespace: ta.ns,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "http",
+					Port:       80,
+					TargetPort: intstr.IntOrString{IntVal: 5000},
+				},
+			},
+			Type:     corev1.ServiceTypeNodePort,
+			Selector: map[string]string{"app": "registry"},
+		},
+	}
+	_, err = kubeClient.CoreV1().Services(ta.ns).Create(context.Background(), &service, metav1.CreateOptions{})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func bothCbsABsAndDBsGenerated(ta *testArgs) (bool, error) {
