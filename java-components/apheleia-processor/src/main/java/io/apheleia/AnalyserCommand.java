@@ -1,6 +1,7 @@
 package io.apheleia;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -14,6 +15,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.UnaryOperator;
@@ -163,6 +165,28 @@ public class AnalyserCommand implements Runnable {
                                 untrackedCommunityClassesForMaven.computeIfAbsent(s, (a) -> new HashMap<>()).put(file,
                                         HashUtil.sha1(b));
                             });
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                var path = dir.resolve("_remote.repositories");
+                if (Files.exists(path)) {
+                    Properties p = new Properties();
+                    try (InputStream inputStream = Files.newInputStream(path)) {
+                        p.load(inputStream);
+                        for (var k : p.keySet()) {
+                            //for downloaded files this will look something like foo.pom>central=
+                            //for locally built files it is just foo.pom>=
+                            //which means the key ends with >
+                            if (!k.toString().endsWith(">")) {
+                                return FileVisitResult.CONTINUE;
+                            }
+                        }
+                        return FileVisitResult.SKIP_SUBTREE;
+
+                    }
                 }
                 return FileVisitResult.CONTINUE;
             }
