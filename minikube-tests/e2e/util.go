@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/jbsconfig"
 	"html/template"
 	"io"
 	v13 "k8s.io/api/apps/v1"
+	ev12 "k8s.io/api/events/v1"
 	v1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	ev1 "k8s.io/client-go/kubernetes/typed/events/v1"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -120,7 +121,7 @@ func commonSetup(t *testing.T, ta *testArgs, gitCloneUrl string) *testArgs {
 	if ta == nil {
 		ta = &testArgs{
 			t:        t,
-			timeout:  time.Minute * 15,
+			timeout:  time.Minute * 30,
 			interval: time.Second * 10,
 		}
 	}
@@ -145,7 +146,14 @@ func commonSetup(t *testing.T, ta *testArgs, gitCloneUrl string) *testArgs {
 	go watchEvents(eventClient, ta)
 	dumpNodes(ta)
 
-	var err error
+	cm := corev1.ConfigMap{}
+	cm.Namespace = ta.ns
+	cm.Name = "apheleia-config"
+	cm.Data = map[string]string{"maven-repo": "https://todo.com", "aws-owner": "todo", "aws-domain": "todo"}
+	_, err := kubeClient.CoreV1().ConfigMaps(ta.ns).Create(context.Background(), &cm, metav1.CreateOptions{})
+	if err != nil {
+		debugAndFailTest(ta, err.Error())
+	}
 
 	// have seen delays in CRD presence along with missing pipeline SA
 	err = wait.PollImmediate(1*time.Second, 1*time.Minute, func() (done bool, err error) {
@@ -177,7 +185,7 @@ func commonSetup(t *testing.T, ta *testArgs, gitCloneUrl string) *testArgs {
 		debugAndFailTest(ta, err.Error())
 	}
 
-	mavenYamlPath := filepath.Join(path, "..", "..", "deploy", "base", "maven-v0.2.yaml")
+	mavenYamlPath := filepath.Join(path, "..", "..", "hack", "example", "maven.yaml")
 	ta.maven = &v1beta1.Task{}
 	obj = streamFileYamlToTektonObj(mavenYamlPath, ta.maven, ta)
 	ta.maven, ok = obj.(*v1beta1.Task)
@@ -214,7 +222,7 @@ func commonSetup(t *testing.T, ta *testArgs, gitCloneUrl string) *testArgs {
 	if err != nil {
 		debugAndFailTest(ta, err.Error())
 	}
-	pipelineYamlPath := filepath.Join(path, "..", "..", "hack", "examples", "pipeline.yaml")
+	pipelineYamlPath := filepath.Join(path, "..", "..", "hack", "example", "pipeline.yaml")
 	ta.pipeline = &v1beta1.Pipeline{}
 	obj = streamFileYamlToTektonObj(pipelineYamlPath, ta.pipeline, ta)
 	ta.pipeline, ok = obj.(*v1beta1.Pipeline)
@@ -222,93 +230,6 @@ func commonSetup(t *testing.T, ta *testArgs, gitCloneUrl string) *testArgs {
 		debugAndFailTest(ta, fmt.Sprintf("file %s did not produce a pipeline: %#v", pipelineYamlPath, obj))
 	}
 	ta.pipeline, err = tektonClient.TektonV1beta1().Pipelines(ta.ns).Create(context.TODO(), ta.pipeline, metav1.CreateOptions{})
-	if err != nil {
-		debugAndFailTest(ta, err.Error())
-	}
-	return ta
-}
-func setup(t *testing.T, ta *testArgs) *testArgs {
-
-	ta = commonSetup(t, ta, gitCloneTaskUrl)
-	err := wait.PollImmediate(1*time.Second, 1*time.Minute, func() (done bool, err error) {
-		_, err = kubeClient.CoreV1().ServiceAccounts(ta.ns).Get(context.TODO(), "pipeline", metav1.GetOptions{})
-		if err != nil {
-			ta.Logf(fmt.Sprintf("get of pipeline SA err: %s", err.Error()))
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		debugAndFailTest(ta, "pipeline SA not created in timely fashion")
-	}
-	owner := os.Getenv("QUAY_E2E_ORGANIZATION")
-	if owner == "" {
-		owner = "redhat-appstudio-qe"
-	}
-	jbsConfig := v1alpha1.JBSConfig{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: ta.ns,
-			Name:      v1alpha1.JBSConfigName,
-		},
-		Spec: v1alpha1.JBSConfigSpec{
-			EnableRebuilds: true,
-			MavenBaseLocations: map[string]string{
-				"maven-repository-300-jboss":     "https://repository.jboss.org/nexus/content/groups/public/",
-				"maven-repository-301-confluent": "https://packages.confluent.io/maven",
-				"maven-repository-302-redhat":    "https://maven.repository.redhat.com/ga",
-				"maven-repository-303-jitpack":   "https://jitpack.io"},
-
-			CacheSettings: v1alpha1.CacheSettings{ //up the cache size, this is a lot of builds all at once, we could limit the number of pods instead but this gets the test done faster
-				RequestMemory: "1024Mi",
-				LimitMemory:   "1024Mi",
-				WorkerThreads: "100",
-				RequestCPU:    "10m",
-			},
-			ImageRegistry: v1alpha1.ImageRegistry{
-				Host:       "quay.io",
-				Owner:      owner,
-				Repository: "test-images",
-				PrependTag: strconv.FormatInt(time.Now().UnixMilli(), 10),
-			},
-			RelocationPatterns: []v1alpha1.RelocationPatternElement{
-				{
-					RelocationPattern: v1alpha1.RelocationPattern{
-						BuildPolicy: "default",
-						Patterns: []v1alpha1.PatternElement{
-							{
-								Pattern: v1alpha1.Pattern{
-									From: "(io.github.stuartwdouglas.hacbs-test.simple):(simple-jdk17):(99-does-not-exist)",
-									To:   "io.github.stuartwdouglas.hacbs-test.simple:simple-jdk17:0.1.2",
-								},
-							},
-							{
-								Pattern: v1alpha1.Pattern{
-									From: "org.graalvm.sdk:graal-sdk:21.3.2",
-									To:   "org.graalvm.sdk:graal-sdk:21.3.2.0-1-redhat-00001",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Status: v1alpha1.JBSConfigStatus{},
-	}
-	_, err = jvmClient.JvmbuildserviceV1alpha1().JBSConfigs(ta.ns).Create(context.TODO(), &jbsConfig, metav1.CreateOptions{})
-	if err != nil {
-		debugAndFailTest(ta, err.Error())
-	}
-	decoded, err := base64.StdEncoding.DecodeString(os.Getenv("QUAY_TOKEN"))
-	if err != nil {
-		debugAndFailTest(ta, err.Error())
-	}
-	secret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "jvm-build-image-secrets", Namespace: ta.ns},
-		Data: map[string][]byte{".dockerconfigjson": decoded}}
-	_, err = kubeClient.CoreV1().Secrets(ta.ns).Create(context.TODO(), &secret, metav1.CreateOptions{})
-	if err != nil {
-		debugAndFailTest(ta, err.Error())
-	}
-	err = waitForCache(ta)
 	if err != nil {
 		debugAndFailTest(ta, err.Error())
 	}
@@ -411,43 +332,6 @@ func streamFileYamlToTektonObj(path string, obj runtime.Object, ta *testArgs) ru
 		debugAndFailTest(ta, err.Error())
 	}
 	return decodeBytesToTektonObjbytes(bytes, obj, ta)
-}
-
-func activePipelineRuns(ta *testArgs, dbg bool) bool {
-	prClient := tektonClient.TektonV1beta1().PipelineRuns(ta.ns)
-	listOptions := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=", artifactbuild.PipelineRunLabel),
-	}
-	prList, err := prClient.List(context.TODO(), listOptions)
-	if err != nil {
-		ta.Logf(fmt.Sprintf("error listing pipelineruns: %s", err.Error()))
-		return true
-	}
-	for _, pr := range prList.Items {
-		if !pr.IsDone() {
-			if dbg {
-				ta.Logf(fmt.Sprintf("pr %s not done out of %d items", pr.Name, len(prList.Items)))
-			}
-			return true
-		}
-	}
-	if dbg {
-		ta.Logf(fmt.Sprintf("all prs are done out of %d items", len(prList.Items)))
-	}
-	return false
-}
-
-func prPods(ta *testArgs, name string) []corev1.Pod {
-	podClient := kubeClient.CoreV1().Pods(ta.ns)
-	listOptions := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("tekton.dev/pipelineRun=%s", name),
-	}
-	podList, err := podClient.List(context.TODO(), listOptions)
-	if err != nil {
-		ta.Logf(fmt.Sprintf("error listing pr pods %s", err.Error()))
-		return []corev1.Pod{}
-	}
-	return podList.Items
 }
 
 //go:embed report.html
@@ -862,5 +746,28 @@ func deployDockerRegistry(ta *testArgs) {
 	_, err = kubeClient.CoreV1().Services(ta.ns).Create(context.Background(), &service, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
+	}
+}
+
+func watchEvents(eventClient ev1.EventInterface, ta *testArgs) {
+	ctx := context.TODO()
+	watch, err := eventClient.Watch(ctx, metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	for {
+		res := <-watch.ResultChan()
+		if res.Object == nil {
+			continue
+		}
+		event, ok := res.Object.(*ev12.Event)
+		if !ok {
+			continue
+		}
+		if event.Type == corev1.EventTypeNormal {
+			continue
+		}
+		ta.Logf(fmt.Sprintf("non-normal event reason %s about obj %s:%s message %s", event.Reason, event.Regarding.Kind, event.Regarding.Name, event.Note))
+		dumpNodes(ta)
 	}
 }

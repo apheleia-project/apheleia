@@ -10,6 +10,9 @@ jobs:
       - uses: actions/checkout@v2
       - name: Start minikube
         uses: medyagh/setup-minikube@master
+        with:
+            cpus: max
+            memory: max
       - name: Build Images
         run: |
           export SHELL=/bin/bash
