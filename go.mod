@@ -19,12 +19,10 @@ require (
 
 require (
 	github.com/google/go-containerregistry v0.12.0 // indirect
-	github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144
+	github.com/redhat-appstudio/jvm-build-service v0.0.0-20230411231133-b2d6bb458a9d
 )
 
-require (
-	k8s.io/cli-runtime v0.24.3
-)
+require k8s.io/cli-runtime v0.24.3
 
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect

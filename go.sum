@@ -419,8 +419,8 @@ github.com/prometheus/procfs v0.8.0 h1:ODq8ZFEaYeCaZOJlZZdJA2AbQR98dSHSM1KW/You5
 github.com/prometheus/procfs v0.8.0/go.mod h1:z7EfXMXOkbkqb9IINtpCn86r/to3BnA0uaxHdg830/4=
 github.com/prometheus/statsd_exporter v0.21.0 h1:hA05Q5RFeIjgwKIYEdFd59xu5Wwaznf33yKI+pyX6T8=
 github.com/prometheus/statsd_exporter v0.21.0/go.mod h1:rbT83sZq2V+p73lHhPZfMc3MLCHmSHelCh9hSGYNLTQ=
-github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144 h1:dX5z9mN491jMHjh3pF4IJ+FbIoyh0wKv6S/t3rLsMwU=
-github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144/go.mod h1:4i0T8wtYqkfDpvzeix0Fu85UKBglskJ18wok2bDkdEA=
+github.com/redhat-appstudio/jvm-build-service v0.0.0-20230411231133-b2d6bb458a9d h1:6gSgQN7u2UCgO9qqnPlVqHvFFBTlgEB+/Ne+lAGG/CU=
+github.com/redhat-appstudio/jvm-build-service v0.0.0-20230411231133-b2d6bb458a9d/go.mod h1:WkYxSS8qxXbPR5y1QUyGWZRKapjMRwnM1TmpOUUP8W4=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rogpeppe/go-internal v1.8.0 h1:FCbCCtXNOY3UtUuHUYaghJg4y7Fd14rXifAYUAtL9R8=
@@ -457,8 +457,6 @@ github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKsk=
-github.com/stuartwdouglas/apheleia v0.0.0-20230208112316-f33d22216913 h1:zoMHZdZ3HSpjrofD0vgp+Om4UshfvNHxrStshVaw95c=
-github.com/stuartwdouglas/apheleia v0.0.0-20230208112316-f33d22216913/go.mod h1:1nVgkW5E30llRrLyNxFcIVcX8VwWQu3zP3MjX+7pXu8=
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/tektoncd/pipeline v0.41.1 h1:WpOzt0NiU/hl3q/PU6genLsS6KCmA6dFgcMHNp3cnD8=
 github.com/tektoncd/pipeline v0.41.1/go.mod h1:YY4+PGfdsd6Qxn3PZXmCpKeS3heK8pIIcnUt37vRJ2Q=

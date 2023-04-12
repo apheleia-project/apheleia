@@ -192,13 +192,14 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
-# github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144
+# github.com/redhat-appstudio/jvm-build-service v0.0.0-20230411231133-b2d6bb458a9d
 ## explicit; go 1.18
 github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1
 github.com/redhat-appstudio/jvm-build-service/pkg/client/clientset/versioned
 github.com/redhat-appstudio/jvm-build-service/pkg/client/clientset/versioned/scheme
 github.com/redhat-appstudio/jvm-build-service/pkg/client/clientset/versioned/typed/jvmbuildservice/v1alpha1
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/artifactbuild
+github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/jbsconfig
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/systemconfig
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/util
 # github.com/spf13/pflag v1.0.5
