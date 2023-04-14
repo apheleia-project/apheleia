@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -136,9 +135,6 @@ public class AnalyserCommand implements Runnable {
                 }
             }
             //write the sbom including the community deps
-            for (var i : communityGavs) {
-                trackingData.add(new TrackingData(i, "central", Collections.emptyMap()));
-            }
             writeSbom(trackingData);
             if (!communityGavs.isEmpty()) {
                 //exit with non-zero if there were community deps
