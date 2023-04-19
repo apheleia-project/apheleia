@@ -189,7 +189,7 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
-# github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144
+# github.com/redhat-appstudio/jvm-build-service v0.0.0-20230413213209-f2c6204ced24
 ## explicit; go 1.18
 github.com/redhat-appstudio/jvm-build-service/pkg/apis/jvmbuildservice/v1alpha1
 github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/artifactbuild

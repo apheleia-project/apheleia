@@ -266,7 +266,12 @@ func (r *ReconcileArtifactBuild) notifyResult(ctx context.Context, log logr.Logg
 		}},
 	}
 	log.Info("Notifying ComponentBuild Status Update via PR Comment", "name", cb.Name, "scmUrl", cb.Spec.SCMURL, "PRURL", cb.Spec.PRURL, "state", cb.Status.State)
-	return r.client.Create(ctx, tr)
+	err = r.client.Create(ctx, tr)
+	if err != nil {
+		return err
+	}
+	cb.Status.ResultNotified = true
+	return r.client.Update(ctx, cb)
 }
 
 func (r *ReconcileArtifactBuild) deployArtifact(ctx context.Context, log logr.Logger, abr *jvmbs.ArtifactBuild, deployUrl string, owner string, domain string) error {
