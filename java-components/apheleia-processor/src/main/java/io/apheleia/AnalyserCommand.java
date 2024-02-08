@@ -347,16 +347,25 @@ public class AnalyserCommand implements Runnable {
             component.setVersion(version);
             component.setPublisher(i.source);
             component.setPurl(String.format("pkg:maven/%s/%s@%s", group, name, version));
+            List<Property> properties = new ArrayList<>();
+            for (var e : i.getAttributes().entrySet()) {
+                Property property = new Property();
+                property.setName("java:" + e.getKey());
+                property.setValue(e.getValue());
+                properties.add(property);
+            }
 
             Property packageTypeProperty = new Property();
             packageTypeProperty.setName("package:type");
             packageTypeProperty.setValue("maven");
+            properties.add(packageTypeProperty);
 
             Property packageLanguageProperty = new Property();
             packageLanguageProperty.setName("package:language");
             packageLanguageProperty.setValue("java");
+            properties.add(packageTypeProperty);
 
-            component.setProperties(List.of(packageTypeProperty, packageLanguageProperty));
+            component.setProperties(properties);
 
             bom.getComponents().add(component);
         }
