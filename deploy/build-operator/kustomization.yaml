@@ -2,11 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- https://github.com/redhat-appstudio/jvm-build-service/deploy/crds/base?ref=66bf42385144de0d5850c8040eb5bd60e331035b
-- https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/base?ref=66bf42385144de0d5850c8040eb5bd60e331035b
-- https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/config?ref=66bf42385144de0d5850c8040eb5bd60e331035b
+- https://github.com/redhat-appstudio/jvm-build-service/deploy/crds/base?ref=f2c6204ced24ee504822a57fd25beaf198c9aae5
+- https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/base?ref=f2c6204ced24ee504822a57fd25beaf198c9aae5
+- https://github.com/redhat-appstudio/jvm-build-service/deploy/operator/config?ref=f2c6204ced24ee504822a57fd25beaf198c9aae5
 
 images:
   - name: hacbs-jvm-operator
     newName: quay.io/redhat-appstudio/hacbs-jvm-controller
-    newTag: 66bf42385144de0d5850c8040eb5bd60e331035b
+    newTag: f2c6204ced24ee504822a57fd25beaf198c9aae5

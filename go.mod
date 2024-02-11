@@ -19,7 +19,7 @@ require (
 
 require (
 	github.com/google/go-containerregistry v0.12.0 // indirect
-	github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144
+	github.com/redhat-appstudio/jvm-build-service v0.0.0-20230413213209-f2c6204ced24
 )
 
 require (

@@ -332,6 +332,8 @@ github.com/prometheus/statsd_exporter v0.21.0 h1:hA05Q5RFeIjgwKIYEdFd59xu5Wwaznf
 github.com/prometheus/statsd_exporter v0.21.0/go.mod h1:rbT83sZq2V+p73lHhPZfMc3MLCHmSHelCh9hSGYNLTQ=
 github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144 h1:dX5z9mN491jMHjh3pF4IJ+FbIoyh0wKv6S/t3rLsMwU=
 github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144/go.mod h1:4i0T8wtYqkfDpvzeix0Fu85UKBglskJ18wok2bDkdEA=
+github.com/redhat-appstudio/jvm-build-service v0.0.0-20230413213209-f2c6204ced24 h1:9TRVghhvW+4HtWsVsRPXrxJUniedEcJCW8cNTYTeryw=
+github.com/redhat-appstudio/jvm-build-service v0.0.0-20230413213209-f2c6204ced24/go.mod h1:WkYxSS8qxXbPR5y1QUyGWZRKapjMRwnM1TmpOUUP8W4=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rogpeppe/go-internal v1.8.0 h1:FCbCCtXNOY3UtUuHUYaghJg4y7Fd14rXifAYUAtL9R8=
