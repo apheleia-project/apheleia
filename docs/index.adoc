@@ -446,51 +446,11 @@ tkn pr logs jackson.databind.2.13.4.2-50dca403-<discoveredid> <2>
 
 This may be helpful to diagnose exactly why it failed.
 
-To fix missing SCM information we need to add additional information to the https://github.com/redhat-appstudio/jvm-build-data/tree/main/scm-info[build information repository]. Once this has been updated see the section on <<rebuilding_artifacts>> for instructions on how to re-run it.
+To fix missing SCM information we need to add additional information to the https://github.com/redhat-appstudio/jvm-build-data/tree/main/scm-info[build information repository]. Once this has been updated see the section on <<rebuilding_artifacts>> for instructions on how to re-run it which should see it resolve this information, and it should then move to state `ArtifactBuildBuilding` (and hopefully eventually to `ArtifactBuildComplete`).
 
 NOTE: This may be added into a private build information repo, see <<private_build_data_repos>> for more info.
 
-The SCM information for the `com.fasterxml.jackson.core:jackson-databind:2.13.4.2` above will be searched for in the following
-location, from most specific to least specific:
-
-```
-scm-info/com/fasterxml/jackson/core/_artifact/jackson-databind/_version/2.13.4.2/scm.yaml <1>
-scm-info/com/fasterxml/jackson/core/_artifact/jackson-databind/scm.yaml <2>
-scm-info/com/fasterxml/jackson/core/scm.yaml <3>
-```
-<1> This approach specifies the group-id, the artifact-id and the version. Note that the version matches based on 'less than', so older versions (e.g. 2.1) would still match, while newer versions would not.
-<2> These match based on the group-id and artifact-id. This approach is good for when a specific group-id is used in lots of different repositories.
-<3> These match based on the group-id. This is used when we know the majority of artifacts with the group id come from a single repo.
-
-Once we have identified where we can add a SCM info file. This file has the following format. Note that everything is optional
-except for the URL.
-
-```
-type: "git" <1>
-uri: "https://github.com/eclipse-ee4j/jaxb-stax-ex.git" <2>
-tagMapping: <3>
-  - pattern: (.*)-jre <4>
-    tag: v$1 <5>
-  - pattern: (\d+)\.(\d+)
-    tag: release-$1-$2
-  - pattern: 3.0
-    tag: jaxb-stax3-3.0
-legacyRepos: <6>
-  - type: "git"
-    uri: "https://github.com/javaee/metro-stax-ex.git"
-    path: "stax-ex" <7>
-
-```
-<1> The type is optional, at the moment only git is supported.
-<2> The primary URI to search
-<3> Mappings between a version and a tag. We attempt to do this automatically but it is not always successful.
-<4> If the version matches the regex then we look for a corresponding tag.
-<5> The tag to search for in the repo. `$n` can be used to substitute the regex capture groups, with $0 being the full match.
-<6> Additional repositories to search. This can be useful if a project has moved home over time.
-<7> Some projects are not in the root of the repo. The path tells us the directory they are in.
-
-Once we have added this information re-running the build should see it resolve this information, and it should then move to state `ArtifactBuildBuilding` (and hopefully eventually to `ArtifactBuildComplete`).
-
+For further details on the structure and format of files within the jvm-build-data repository see https://github.com/redhat-appstudio/jvm-build-data
 
 === Dealing With Failed Builds [[failed_builds]]
 
@@ -520,45 +480,8 @@ The 1.11-8 release had no build file, so the project was forked and one added. T
 
 ==== Tweaking Build Parameters
 
-It is also possible to tweak build parameters to get them to pass. This is done by adding a `build.yaml` file to the build
-data repository. For our databind example the file would go in one of the following locations:
-
-```
-build-info/github.com/FasterXML/jackson-databind/_version/2.13.4.2/build.yaml
-build-info/github.com/FasterXML/jackson-databind/build.yaml
-```
-
-An example of a complete (although nonsensical) file is shown below:
-
-```
-enforceVersion: true <1>
-additionalArgs: <2>
-  - "-DskipDocs"
-alternativeArgs: <3>
-  - "'set Global / baseVersionSuffix:=\"\"'"
-  - "enableOptimizer"
-preBuildScript: | <4>
-    ./autogen.sh
-    /bin/sh -c "$(rpm --eval %configure); $(rpm --eval %__make) $(rpm --eval %_smp_mflags)"
-additionalDownloads: <5>
-  - uri: https://github.com/mikefarah/yq/releases/download/v4.30.4/yq_linux_amd64 <6>
-    sha256: 30459aa144a26125a1b22c62760f9b3872123233a5658934f7bd9fe714d7864d <7>
-    type: executable <8>
-    fileName: yq <9>
-    binaryPath: only_for_tar/bin <10>
-```
-<1> If the tag contains build files that do not match the version include this to override the version.
-<2> Additional parameters to add to the build command line.
-<3> A complete replacement for the build command line, this should not be used with 'additionalArgs' as it will replace them. This is mostly used in SBT builds.
-<4> A script to run before the build. This can do things like build native components that are required.
-<5> Additional downloads required for the build.
-<6> The URI to download from
-<7> The expected SHA.
-<8> The type, can be either `executable`, or `tar`.
-<9> The final file name, this will be added to `$PATH`. This is only for `executable` files.
-<10> The path to the directory inside the tar file that contains executables, this will be added to `$PATH`.
-
-
+It is also possible to tweak build parameters to get them to pass via a `build.yaml` file in the build
+data repository. For further details on the structure and format see https://github.com/redhat-appstudio/jvm-build-data
 
 == Placeholder Section Heading
 
