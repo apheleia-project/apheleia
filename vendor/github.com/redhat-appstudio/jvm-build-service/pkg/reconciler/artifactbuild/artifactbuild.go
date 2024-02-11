@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/redhat-appstudio/jvm-build-service/pkg/reconciler/systemconfig"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
 	"strconv"
 	"strings"
@@ -333,7 +334,11 @@ func (r *ReconcileArtifactBuild) handleStateNew(ctx context.Context, log logr.Lo
 		Results:    []pipelinev1beta1.PipelineResult{},
 		Workspaces: []pipelinev1beta1.PipelineWorkspaceDeclaration{{Name: "tls"}},
 	}
-	pr.Spec.Workspaces = []pipelinev1beta1.WorkspaceBinding{{Name: "tls", ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: v1alpha1.TlsConfigMapName}}}}
+	if !jbsConfig.Spec.CacheSettings.DisableTLS {
+		pr.Spec.Workspaces = []pipelinev1beta1.WorkspaceBinding{{Name: "tls", ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: v1alpha1.TlsConfigMapName}}}}
+	} else {
+		pr.Spec.Workspaces = []pipelinev1beta1.WorkspaceBinding{{Name: "tls", EmptyDir: &corev1.EmptyDirVolumeSource{}}}
+	}
 	for _, i := range task.Results {
 		pr.Spec.PipelineSpec.Results = append(pr.Spec.PipelineSpec.Results, pipelinev1beta1.PipelineResult{Name: i.Name, Type: pipelinev1beta1.ResultsTypeString, Description: i.Description, Value: pipelinev1beta1.ResultValue{Type: pipelinev1beta1.ParamTypeString, StringVal: "$(tasks." + TaskName + ".results." + i.Name + ")"}})
 	}
@@ -657,19 +662,17 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 	if err != nil {
 		return nil, err
 	}
-	recipes := ""
-	additional := jbsConfig.Spec.AdditionalRecipes
-	for _, recipe := range additional {
-		if len(strings.TrimSpace(recipe)) > 0 {
-			recipes = recipes + recipe + ","
-		}
-	}
-	recipes = recipes + settingOrDefault(systemConfig.Spec.RecipeDatabase, v1alpha1.DefaultRecipeDatabase)
 
 	zero := int64(0)
-	cacheUrl := "https://jvm-build-workspace-artifact-cache-tls." + jbsConfig.Namespace + ".svc.cluster.local/v2/cache/user/default"
+	cacheUrl := "https://jvm-build-workspace-artifact-cache-tls." + jbsConfig.Namespace + ".svc.cluster.local"
 	if jbsConfig.Spec.CacheSettings.DisableTLS {
-		cacheUrl = "http://jvm-build-workspace-artifact-cache." + jbsConfig.Namespace + ".svc.cluster.local/v2/cache/user/default"
+		cacheUrl = "http://jvm-build-workspace-artifact-cache." + jbsConfig.Namespace + ".svc.cluster.local"
+	}
+	pullPolicy := corev1.PullIfNotPresent
+	if strings.HasPrefix(image, "quay.io/minikube") {
+		pullPolicy = corev1.PullNever
+	} else if strings.HasSuffix(image, "dev") {
+		pullPolicy = corev1.PullAlways
 	}
 	return &pipelinev1beta1.TaskSpec{
 		Workspaces: []pipelinev1beta1.WorkspaceDeclaration{{Name: "tls"}},
@@ -686,11 +689,10 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 			{
 				Name:            "lookup-artifact-location",
 				Image:           image,
+				ImagePullPolicy: pullPolicy,
 				SecurityContext: &corev1.SecurityContext{RunAsUser: &zero},
 				Script: InstallKeystoreIntoBuildRequestProcessor([]string{
 					"lookup-scm",
-					"--recipes",
-					recipes,
 					"--scm-url",
 					"$(results." + PipelineResultScmUrl + ".path)",
 					"--scm-tag",
@@ -710,6 +712,11 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 					"--cache-url",
 					cacheUrl,
 				}),
+				Resources: corev1.ResourceRequirements{
+					//TODO: make configurable
+					Requests: corev1.ResourceList{"memory": resource.MustParse("128Mi"), "cpu": resource.MustParse("10m")},
+					Limits:   corev1.ResourceList{"memory": resource.MustParse("128Mi")},
+				},
 				Env: []corev1.EnvVar{
 					{Name: "GIT_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: v1alpha1.GitSecretName}, Key: v1alpha1.GitSecretTokenKey, Optional: &trueBool}}},
 				},
@@ -721,6 +728,9 @@ func (r *ReconcileArtifactBuild) createLookupScmInfoTask(ctx context.Context, lo
 func (r *ReconcileArtifactBuild) handleCommunityDependencies(ctx context.Context, split []string, namespace string, log logr.Logger) error {
 	log.Info("Found pipeline run with community dependencies")
 	for _, gav := range split {
+		if len(gav) == 0 {
+			continue
+		}
 		name := CreateABRName(gav)
 		log.Info("Found community dependency: ", "gav", gav)
 		abr := v1alpha1.ArtifactBuild{}
@@ -740,13 +750,6 @@ func (r *ReconcileArtifactBuild) handleCommunityDependencies(ctx context.Context
 		}
 	}
 	return nil
-}
-
-func settingOrDefault(setting, def string) string {
-	if len(strings.TrimSpace(setting)) == 0 {
-		return def
-	}
-	return setting
 }
 
 func InstallKeystoreIntoBuildRequestProcessor(args []string) string {

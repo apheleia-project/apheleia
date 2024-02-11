@@ -35,6 +35,7 @@
         <cyclonedx-core-java.version>7.1.4</cyclonedx-core-java.version>
         <aetherVersion>1.0.0.v20140518</aetherVersion>
         <mavenVersion>3.1.0</mavenVersion>
+        <dependency-check-core.version>8.2.0</dependency-check-core.version>
     </properties>
 
     <modules>
@@ -61,6 +62,11 @@
                 <groupId>io.github.redhat-appstudio.jvmbuild</groupId>
                 <artifactId>hacbs-build-analyser</artifactId>
                 <version>${jvm-build-service.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-core</artifactId>
+                <version>${dependency-check-core.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.redhat-appstudio.jvmbuild</groupId>

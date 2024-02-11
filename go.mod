@@ -19,8 +19,10 @@ require (
 
 require (
 	github.com/google/go-containerregistry v0.12.0 // indirect
-	github.com/redhat-appstudio/jvm-build-service v0.0.0-20230322082207-66bf42385144
+	github.com/redhat-appstudio/jvm-build-service v0.0.0-20230411231133-b2d6bb458a9d
 )
+
+require k8s.io/cli-runtime v0.24.3
 
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect
@@ -55,6 +57,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kcp-dev/apimachinery v0.0.0-20220803185518-868856d14e8a // indirect
 	github.com/kcp-dev/logicalcluster/v2 v2.0.0-alpha.1 // indirect
+	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

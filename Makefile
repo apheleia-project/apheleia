@@ -44,8 +44,8 @@ verify-generate-deepcopy-client: generate-deepcopy-client
 	hack/verify-codegen.sh
 
 dev-image:
-	docker build . -t quay.io/$(QUAY_USERNAME)/apheleia-controller:dev
-	docker push quay.io/$(QUAY_USERNAME)/apheleia-controller:dev
+	docker build . -t quay.io/$(QUAY_USERNAME)/apheleia-operator:dev
+	docker push quay.io/$(QUAY_USERNAME)/apheleia-operator:dev
 
 java-dev-image:
 	cd java-components && mvn clean install -Dlocal -DskipTests
@@ -54,8 +54,8 @@ java-dev-image:
 dev: dev-image java-dev-image
 	./deploy/development.sh
 
-dev-minikube: dev
-	./deploy/minikube-development.sh
+minikube-test:
+	KUBERNETES_CONFIG=${KUBECONFIG} go test -count 1 -tags normal -timeout 20m -v ./minikube-tests/...
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.

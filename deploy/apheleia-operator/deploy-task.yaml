@@ -22,7 +22,7 @@ spec:
   steps:
     - name: deploy
       image: apheleia-processor
-      imagePullPolicy: Always
+      imagePullPolicy: IfNotPresent
       args:
         - "deploy"
         - "--domain"

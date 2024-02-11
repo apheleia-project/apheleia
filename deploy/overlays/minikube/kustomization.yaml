@@ -1,0 +1,52 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+ - "../../crds"
+ - "../../apheleia-operator"
+ - "../../user-namespace"
+ - "rbac.yaml"
+
+images:
+  - name: apheleia-operator
+    newName: local/apheleia-operator
+    newTag: dev
+
+patchesJson6902:
+- patch: |-
+    - op: replace
+      path: "/spec/steps/0/image"
+      value: "local/apheleia-processor:dev"
+  target:
+    name: apheleia-deploy
+    kind: ClusterTask
+
+patches:
+- patch: |-
+    - op: replace
+      path: "/spec/owner"
+      value: "test"
+  target:
+    name: jvm-build-config
+    kind: JBSConfig
+- patch: |-
+    - op: replace
+      path: "/data/maven-repo"
+      value: "https://todo.com"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
+- patch: |-
+    - op: replace
+      path: "/data/aws-owner"
+      value: "todotodo"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
+- patch: |-
+    - op: replace
+      path: "/data/aws-domain"
+      value: "todo"
+  target:
+    name: apheleia-config
+    kind: ConfigMap
