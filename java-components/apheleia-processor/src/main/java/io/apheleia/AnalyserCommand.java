@@ -162,7 +162,7 @@ public class AnalyserCommand implements Runnable {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 if (file.getFileName().toString().endsWith(".jar") && !file.getFileName().toString().endsWith("-runner.jar")) {
-                    var relative = file.relativize(mavenRepo).toString().split("/");
+                    var relative = mavenRepo.relativize(file).toString().split("/");
                     var version = relative[relative.length - 2];
                     var artifact = relative[relative.length - 3];
                     StringBuilder group = new StringBuilder();
