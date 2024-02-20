@@ -21,8 +21,8 @@ import java.util.TreeSet;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
-import javax.enterprise.inject.Instance;
-import javax.inject.Inject;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 import org.cyclonedx.BomGeneratorFactory;
 import org.cyclonedx.CycloneDxSchema;
@@ -52,6 +52,9 @@ public class AnalyserCommand implements Runnable {
 
     @CommandLine.Option(names = "--sbom-path", description = "The path to generate a SBOM at")
     Path sbom;
+
+    @CommandLine.Option(names = "--build-sbom-path", description = "The path to generate a build SBOM at")
+    Path buildSbom;
 
     @CommandLine.Option(names = "--maven-repo", required = true, description = "The path to the local .m2/repsitory directory. Usually $HOME/.m2/repository")
     Path mavenRepo;
@@ -87,7 +90,8 @@ public class AnalyserCommand implements Runnable {
                     allowedList.add(Pattern.compile(i));
                 }
             }
-            Set<String> communityGavs = doAnalysis(trackingData, allowedList);
+            Set<TrackingData> buildGavs = new HashSet<>();
+            Set<String> communityGavs = doAnalysis(trackingData, allowedList, buildGavs);
             if (createArtifacts) {
                 if (gitUrl == null || tag == null) {
                     throw new RuntimeException("Cannot create Kubernetes artifacts if --tag and --git-url are not specified");
@@ -135,7 +139,8 @@ public class AnalyserCommand implements Runnable {
                 }
             }
             //write the sbom including the community deps
-            writeSbom(trackingData);
+            writeSbom(trackingData, sbom);
+            writeSbom(buildGavs, buildSbom);
             if (!communityGavs.isEmpty()) {
                 //exit with non-zero if there were community deps
                 Quarkus.asyncExit(1);
@@ -145,7 +150,8 @@ public class AnalyserCommand implements Runnable {
         }
     }
 
-    Set<String> doAnalysis(Set<TrackingData> trackingData, List<Pattern> allowedList) throws IOException {
+    Set<String> doAnalysis(Set<TrackingData> trackingData, List<Pattern> allowedList, Set<TrackingData> buildGavs)
+            throws IOException {
         Set<String> communityGavs = new HashSet<>();
 
         //scan the local maven repo first
@@ -156,7 +162,20 @@ public class AnalyserCommand implements Runnable {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 if (file.getFileName().toString().endsWith(".jar") && !file.getFileName().toString().endsWith("-runner.jar")) {
-                    ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file), file.getFileName().toString(),
+                    var relative = file.relativize(mavenRepo).toString().split("/");
+                    var version = relative[relative.length - 2];
+                    var artifact = relative[relative.length - 3];
+                    StringBuilder group = new StringBuilder();
+                    for (var i = 0; i < relative.length - 3; ++i) {
+                        if (i != 0) {
+                            group.append(".");
+                        }
+                        group.append(relative[i]);
+                    }
+                    var gav = group + ":" + artifact + ":" + version;
+                    Log.infof("Found GAV %s", gav);
+                    var tracking = ClassFileTracker.readTrackingDataFromJar(Files.readAllBytes(file),
+                            file.getFileName().toString(),
                             (s, b) -> {
                                 if (s.equals("module-info")) {
                                     return;
@@ -164,6 +183,21 @@ public class AnalyserCommand implements Runnable {
                                 untrackedCommunityClassesForMaven.computeIfAbsent(s, (a) -> new HashMap<>()).put(file,
                                         HashUtil.sha1(b));
                             });
+                    if (tracking.isEmpty()) {
+                        buildGavs.add(new TrackingData(gav, "unknown", Map.of()));
+                    } else {
+                        boolean gavTracked = false;
+                        for (var i : tracking) {
+                            if (i.gav.equals(gav)) {
+                                gavTracked = true;
+                                break;
+                            }
+                        }
+                        buildGavs.addAll(tracking);
+                        if (!gavTracked) {
+                            buildGavs.add(new TrackingData(gav, "unknown", Map.of()));
+                        }
+                    }
                 }
                 return FileVisitResult.CONTINUE;
             }
@@ -330,7 +364,7 @@ public class AnalyserCommand implements Runnable {
         return communityGavs;
     }
 
-    void writeSbom(Set<TrackingData> trackingData) throws IOException {
+    void writeSbom(Set<TrackingData> trackingData, Path path) throws IOException {
         //now build a cyclone DX bom file
         final Bom bom = new Bom();
         bom.setComponents(new ArrayList<>());
@@ -372,8 +406,8 @@ public class AnalyserCommand implements Runnable {
         BomJsonGenerator generator = BomGeneratorFactory.createJson(CycloneDxSchema.Version.VERSION_14, bom);
         String sbom = generator.toJsonString();
         Log.infof("Generated SBOM:\n%s", sbom);
-        if (this.sbom != null) {
-            Files.writeString(this.sbom, sbom, StandardCharsets.UTF_8);
+        if (path != null) {
+            Files.writeString(path, sbom, StandardCharsets.UTF_8);
         }
     }
 }
